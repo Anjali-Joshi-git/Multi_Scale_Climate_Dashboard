@@ -1407,32 +1407,71 @@ def show_static_geographic_patterns():
         st.write("• Winter warming amplification")
 
 def show_cross_scale_comparison(global_data, country_data, urban_data):
-    """Cross-scale comparisons - FIXED VERSION"""
+    """Cross-scale comparisons - FIXED URBAN DATA PROCESSING"""
     st.header("📊 Multi-Scale Comparison")
     
     try:
-        # Display raw data structures
-        with st.expander("🔍 Raw Data Structures"):
+        # FIX: Process urban data if it's in the malformed format
+        urban_data_processed = urban_data.copy()
+        
+        # Handle the case where urban data has all data in one column
+        if len(urban_data_processed.columns) == 1 and 'city,country,warming_rate_c_per_decade' in urban_data_processed.columns[0]:
+            st.info("🔄 Processing urban data for cross-scale comparison...")
+            
+            # Get the single column name that contains all headers
+            single_col_name = urban_data_processed.columns[0]
+            
+            # Extract the actual column names from the column name itself
+            column_names = single_col_name.split(',')
+            column_names = [col.strip() for col in column_names]
+            
+            # Now split each data row by commas
+            split_data = urban_data_processed[single_col_name].str.split(',', expand=True)
+            
+            # Set the extracted column names
+            if split_data.shape[1] == len(column_names):
+                split_data.columns = column_names
+                
+                # Convert numeric columns
+                numeric_columns = ['warming_rate_c_per_decade', 'r_squared', 'data_points', 'total_months', 
+                                 'start_year', 'end_year', 'mean_temperature']
+                
+                for col in numeric_columns:
+                    if col in split_data.columns:
+                        split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
+                
+                urban_data_processed = split_data
+                st.success("✅ Urban data processed for comparison")
+        
+        # Display raw data structures for debugging
+        with st.expander("🔍 Data Structures for Comparison"):
             col1, col2, col3 = st.columns(3)
             
             with col1:
                 st.subheader("🌍 Global Data")
                 st.write("Columns:", list(global_data.columns))
                 st.write(f"Records: {len(global_data)}")
+                if 'year' in global_data.columns:
+                    st.write(f"Period: {global_data['year'].min()}-{global_data['year'].max()}")
                 st.dataframe(global_data.head(3))
             
             with col2:
                 st.subheader("🇺🇳 Country Data")
                 st.write("Columns:", list(country_data.columns))
                 st.write(f"Countries: {len(country_data)}")
+                if 'warming_rate_c_per_decade' in country_data.columns:
+                    st.write(f"Warming range: {country_data['warming_rate_c_per_decade'].min():.3f} - {country_data['warming_rate_c_per_decade'].max():.3f}°C/decade")
                 st.dataframe(country_data[['country', 'warming_rate_c_per_decade', 'r_squared']].head(3) if 'country' in country_data.columns else country_data.head(3))
             
             with col3:
                 st.subheader("🏙️ Urban Data")
-                st.write("Columns:", list(urban_data.columns))
-                st.write(f"Cities: {len(urban_data)}")
-                st.dataframe(urban_data.head(3))
+                st.write("Columns:", list(urban_data_processed.columns))
+                st.write(f"Cities: {len(urban_data_processed)}")
+                if 'warming_rate_c_per_decade' in urban_data_processed.columns:
+                    st.write(f"Warming range: {urban_data_processed['warming_rate_c_per_decade'].min():.3f} - {urban_data_processed['warming_rate_c_per_decade'].max():.3f}°C/decade")
+                st.dataframe(urban_data_processed.head(3))
         
+        # Scale comparison metrics
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -1441,7 +1480,19 @@ def show_cross_scale_comparison(global_data, country_data, urban_data):
                 global_avg = country_data['warming_rate_c_per_decade'].mean()
                 st.metric("Average Warming Rate", f"{global_avg:.3f}°C/decade")
             else:
-                st.metric("Average Warming Rate", "N/A")
+                # Calculate from global temperature trend if country data not available
+                if 'LandAverageTemperature' in global_data.columns and 'year' in global_data.columns:
+                    # Simple linear regression to estimate trend
+                    years = global_data['year'].values.reshape(-1, 1)
+                    temps = global_data['LandAverageTemperature'].values
+                    if len(years) > 1:
+                        slope = np.polyfit(years.flatten(), temps, 1)[0]
+                        warming_per_decade = slope * 10  # Convert per year to per decade
+                        st.metric("Average Warming Rate", f"{warming_per_decade:.3f}°C/decade")
+                    else:
+                        st.metric("Average Warming Rate", "N/A")
+                else:
+                    st.metric("Average Warming Rate", "N/A")
             st.write("**Primary Driver:** CO₂ concentrations")
             st.write("**Pattern:** Uniform global trend")
             st.write("**Data Source:** Global temperature records")
@@ -1456,45 +1507,92 @@ def show_cross_scale_comparison(global_data, country_data, urban_data):
                     f"{country_min:.3f} - {country_max:.3f}°C/decade"
                 )
                 st.metric("Countries Analyzed", f"{len(country_data)}")
+                
+                # Show fastest warming country
+                fastest_country = country_data.loc[country_data['warming_rate_c_per_decade'].idxmax(), 'country']
+                st.metric("Fastest Warming", f"{country_max:.3f}°C/decade", f"{fastest_country}")
             else:
                 st.metric("Range of Warming", "N/A")
+                st.metric("Countries Analyzed", f"{len(country_data)}")
             st.write("**Key Factors:** Geography, latitude, elevation")
             st.write("**Pattern:** Regional variations")
             st.write("**Data Source:** National temperature datasets")
         
         with col3:
             st.subheader("🏙️ Urban Scale")
-            if 'warming_rate_c_per_decade' in urban_data.columns:
-                urban_avg = urban_data['warming_rate_c_per_decade'].mean()
-                urban_min = urban_data['warming_rate_c_per_decade'].min()
-                urban_max = urban_data['warming_rate_c_per_decade'].max()
+            if 'warming_rate_c_per_decade' in urban_data_processed.columns:
+                urban_avg = urban_data_processed['warming_rate_c_per_decade'].mean()
+                urban_min = urban_data_processed['warming_rate_c_per_decade'].min()
+                urban_max = urban_data_processed['warming_rate_c_per_decade'].max()
                 st.metric("Urban Average", f"{urban_avg:.3f}°C/decade")
                 st.metric("Urban Range", f"{urban_min:.3f} - {urban_max:.3f}°C/decade")
+                
+                # Show fastest warming city
+                if 'city' in urban_data_processed.columns:
+                    fastest_city_idx = urban_data_processed['warming_rate_c_per_decade'].idxmax()
+                    fastest_city = urban_data_processed.loc[fastest_city_idx, 'city']
+                    st.metric("Fastest City", f"{urban_max:.3f}°C/decade", f"{fastest_city}")
             else:
                 st.metric("Urban Average", "N/A")
+                st.metric("Cities Analyzed", f"{len(urban_data_processed)}")
             st.write("**Key Factors:** Urban heat island, population density")
             st.write("**Pattern:** Local amplification")
             st.write("**Data Source:** City weather station data")
         
-        # Scale comparison chart
-        if all(col in df.columns for df, col in [(country_data, 'warming_rate_c_per_decade'), 
-                                               (urban_data, 'warming_rate_c_per_decade')]):
-            st.subheader("📈 Warming Rates Across Scales")
+        # Scale comparison chart - FIXED
+        st.subheader("📈 Warming Rates Across Scales")
+        
+        # Prepare data for comparison
+        comparison_data = []
+        
+        # Global average (using country data average as proxy)
+        if 'warming_rate_c_per_decade' in country_data.columns:
+            global_warming = country_data['warming_rate_c_per_decade'].mean()
+            comparison_data.append({
+                'scale': 'Global Average',
+                'warming_rate': global_warming,
+                'type': 'Background'
+            })
+        
+        # Country statistics
+        if 'warming_rate_c_per_decade' in country_data.columns:
+            country_avg = country_data['warming_rate_c_per_decade'].mean()
+            country_max = country_data['warming_rate_c_per_decade'].max()
             
-            scales_data = pd.DataFrame({
-                'scale': ['Global Average', 'Country Average', 'Urban Average', 'Fastest Country', 'Fastest City'],
-                'warming_rate': [
-                    country_data['warming_rate_c_per_decade'].mean(),
-                    country_data['warming_rate_c_per_decade'].mean(),
-                    urban_data['warming_rate_c_per_decade'].mean(),
-                    country_data['warming_rate_c_per_decade'].max(),
-                    urban_data['warming_rate_c_per_decade'].max()
-                ],
-                'type': ['Background', 'Regional', 'Local', 'Extreme', 'Extreme']
+            comparison_data.append({
+                'scale': 'Country Average',
+                'warming_rate': country_avg,
+                'type': 'Regional'
             })
             
+            comparison_data.append({
+                'scale': 'Fastest Country',
+                'warming_rate': country_max,
+                'type': 'Extreme'
+            })
+        
+        # Urban statistics
+        if 'warming_rate_c_per_decade' in urban_data_processed.columns:
+            urban_avg = urban_data_processed['warming_rate_c_per_decade'].mean()
+            urban_max = urban_data_processed['warming_rate_c_per_decade'].max()
+            
+            comparison_data.append({
+                'scale': 'Urban Average',
+                'warming_rate': urban_avg,
+                'type': 'Local'
+            })
+            
+            comparison_data.append({
+                'scale': 'Fastest City',
+                'warming_rate': urban_max,
+                'type': 'Extreme'
+            })
+        
+        if comparison_data:
+            scales_df = pd.DataFrame(comparison_data)
+            
             fig = px.bar(
-                scales_data,
+                scales_df,
                 x='scale',
                 y='warming_rate',
                 color='type',
@@ -1505,39 +1603,104 @@ def show_cross_scale_comparison(global_data, country_data, urban_data):
                     'Extreme': '#8b0000'
                 },
                 title='Warming Rates Across Spatial Scales',
-                labels={'warming_rate': 'Warming Rate (°C/decade)', 'scale': 'Spatial Scale'}
+                labels={'warming_rate': 'Warming Rate (°C/decade)', 'scale': 'Spatial Scale'},
+                text='warming_rate'
             )
+            
+            # Format the text on bars
+            fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+            
+            # Improve layout
+            fig.update_layout(
+                height=500,
+                showlegend=True,
+                xaxis_title="Spatial Scale",
+                yaxis_title="Warming Rate (°C/decade)",
+                yaxis=dict(range=[0, scales_df['warming_rate'].max() * 1.1])
+            )
+            
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Show data table
+            with st.expander("📋 Comparison Data Table"):
+                display_df = scales_df.copy()
+                display_df['warming_rate'] = display_df['warming_rate'].round(4)
+                st.dataframe(display_df, use_container_width=True)
+        else:
+            st.warning("Insufficient data for scale comparison chart")
         
-        # Key insights
+        # Key insights with actual data
         st.subheader("💡 Key Multi-Scale Insights")
         
-        if all(col in df.columns for df, col in [(country_data, 'warming_rate_c_per_decade'), 
-                                               (urban_data, 'warming_rate_c_per_decade')]):
-            country_avg = country_data['warming_rate_c_per_decade'].mean()
-            urban_avg = urban_data['warming_rate_c_per_decade'].mean()
-            country_max = country_data['warming_rate_c_per_decade'].max()
-            urban_max = urban_data['warming_rate_c_per_decade'].max()
-            
-            insights = [
-                f"**Scale Matters:** Country average ({country_avg:.3f}°C/decade) vs Urban average ({urban_avg:.3f}°C/decade)",
-                f"**Hotspot Identification:** Fastest country ({country_max:.3f}°C/decade) vs Fastest city ({urban_max:.3f}°C/decade)",
-                "**Urban-Rural Difference:** Cities show different warming patterns than surrounding regions",
-                "**Policy Implications:** Different adaptation strategies needed at each scale"
-            ]
-        else:
-            insights = [
-                "**Scale Matters:** Warming rates vary across global, country, and urban scales",
-                "**Hotspot Identification:** Different patterns emerge at different spatial resolutions",
-                "**Urban-Rural Difference:** Cities often show distinct warming patterns",
-                "**Policy Implications:** Tailored strategies needed for each scale"
-            ]
+        insights = []
         
-        for insight in insights:
-            st.write(f"• {insight}")
+        # Global vs Country comparison
+        if 'warming_rate_c_per_decade' in country_data.columns:
+            country_avg = country_data['warming_rate_c_per_decade'].mean()
+            country_max = country_data['warming_rate_c_per_decade'].max()
+            country_min = country_data['warming_rate_c_per_decade'].min()
+            
+            insights.append(f"**Global Consistency:** Average warming rate of {country_avg:.3f}°C/decade across all countries")
+            insights.append(f"**Regional Variability:** Warming ranges from {country_min:.3f} to {country_max:.3f}°C/decade ({(country_max/country_min-1)*100:.0f}% variation)")
+        
+        # Urban insights if available
+        if 'warming_rate_c_per_decade' in urban_data_processed.columns:
+            urban_avg = urban_data_processed['warming_rate_c_per_decade'].mean()
+            urban_max = urban_data_processed['warming_rate_c_per_decade'].max()
+            
+            if 'warming_rate_c_per_decade' in country_data.columns:
+                country_avg = country_data['warming_rate_c_per_decade'].mean()
+                urban_ratio = urban_avg / country_avg if country_avg > 0 else 1
+                insights.append(f"**Urban Amplification:** Cities warm at {urban_avg:.3f}°C/decade ({urban_ratio:.1f}x country average)")
+            
+            insights.append(f"**Urban Extremes:** Fastest-warming city at {urban_max:.3f}°C/decade")
+        
+        # General insights
+        insights.extend([
+            "**Scale Matters:** Different patterns emerge at global, country, and urban scales",
+            "**Policy Implications:** Tailored climate strategies needed for each spatial scale",
+            "**Data Resolution:** Higher resolution reveals more localized patterns and extremes"
+        ])
+        
+        for i, insight in enumerate(insights):
+            st.write(f"{i+1}. {insight}")
+        
+        # Additional statistics section
+        st.subheader("📊 Statistical Summary")
+        
+        if any(df is not None for df in [global_data, country_data, urban_data_processed]):
+            stats_cols = st.columns(3)
+            
+            with stats_cols[0]:
+                st.write("**🌍 Global Scale**")
+                st.write(f"• Data points: {len(global_data)}")
+                if 'year' in global_data.columns:
+                    st.write(f"• Time span: {global_data['year'].max() - global_data['year'].min()} years")
+                st.write("• Coverage: Worldwide")
+            
+            with stats_cols[1]:
+                st.write("**🇺🇳 Country Scale**")
+                st.write(f"• Countries analyzed: {len(country_data)}")
+                if 'warming_rate_c_per_decade' in country_data.columns:
+                    st.write(f"• Data quality (avg R²): {country_data['r_squared'].mean():.3f}" if 'r_squared' in country_data.columns else "• Regional coverage: Global")
+                st.write("• Resolution: National")
+            
+            with stats_cols[2]:
+                st.write("**🏙️ Urban Scale**")
+                st.write(f"• Cities analyzed: {len(urban_data_processed)}")
+                if 'warming_rate_c_per_decade' in urban_data_processed.columns:
+                    st.write(f"• Urban range: {urban_data_processed['warming_rate_c_per_decade'].max() - urban_data_processed['warming_rate_c_per_decade'].min():.3f}°C/decade")
+                st.write("• Resolution: Local")
             
     except Exception as e:
         st.error(f"Error in cross-scale comparison: {e}")
+        
+        with st.expander("🔧 Technical Details"):
+            st.write("Error type:", type(e).__name__)
+            st.write("Error message:", str(e))
+            st.write("Global data shape:", global_data.shape if global_data is not None else "None")
+            st.write("Country data shape:", country_data.shape if country_data is not None else "None")
+            st.write("Urban data shape:", urban_data.shape if urban_data is not None else "None")
 
 def main():
     # DEBUG: Show what's being loaded
