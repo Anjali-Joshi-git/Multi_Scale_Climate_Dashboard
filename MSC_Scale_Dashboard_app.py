@@ -832,111 +832,110 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                     st.error(f"Error displaying country info: {country_error}")
         
         with tab2:
-    st.subheader("🛡️ Climate Vulnerability Assessment")
-    
-    # Check if vulnerability data exists in merged data
-    has_vulnerability_data = any(col.startswith('vulnerability') for col in merged_data.columns)
-    
-    if has_vulnerability_data:
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            # Vulnerability distribution
-            if 'vulnerability_category' in merged_data.columns:
-                vuln_counts = merged_data['vulnerability_category'].value_counts()
-                fig = px.bar(
-                    x=vuln_counts.index,
-                    y=vuln_counts.values,
-                    color=vuln_counts.index,
-                    color_discrete_map={
-                        'Low': '#2ecc71',
-                        'Medium': '#f39c12', 
-                        'High': '#e74c3c',
-                        'Critical': '#8b0000'
-                    },
-                    title='Climate Vulnerability Distribution',
-                    labels={'x': 'Vulnerability Category', 'y': 'Number of Countries'}
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Vulnerability category data not available")
+            st.subheader("🛡️ Climate Vulnerability Assessment")
             
-            # Top vulnerable countries
-            if 'vulnerability_score' in merged_data.columns:
-                top_vulnerable = merged_data.nlargest(10, 'vulnerability_score')
-                fig2 = px.bar(
-                    top_vulnerable,
-                    x='vulnerability_score',
-                    y='country',
-                    orientation='h',
-                    color='vulnerability_category' if 'vulnerability_category' in merged_data.columns else None,
-                    color_discrete_map={
-                        'Low': '#2ecc71',
-                        'Medium': '#f39c12', 
-                        'High': '#e74c3c',
-                        'Critical': '#8b0000'
-                    } if 'vulnerability_category' in merged_data.columns else None,
-                    title='Top 10 Most Vulnerable Countries',
-                    labels={'vulnerability_score': 'Vulnerability Score'}
-                )
-                st.plotly_chart(fig2, use_container_width=True)
-            else:
-                st.info("Vulnerability score data not available")
-        
-        with col2:
-            try:
-                country_info = merged_data[merged_data['country'] == selected_country].iloc[0]
+            # Check if vulnerability data exists in merged data
+            has_vulnerability_data = any(col.startswith('vulnerability') for col in merged_data.columns)
+            
+            if has_vulnerability_data:
+                col1, col2 = st.columns([2, 1])
                 
-                # Show both warming rate and vulnerability together
-                st.subheader(f"🇺🇳 {selected_country}")
-                
-                col_metrics1, col_metrics2 = st.columns(2)
-                
-                with col_metrics1:
-                    if 'warming_rate_c_per_decade' in country_info:
-                        warming_rate = country_info['warming_rate_c_per_decade']
-                        st.metric(
-                            "Warming Rate",
-                            f"{warming_rate:.3f}°C/decade"
+                with col1:
+                    # Vulnerability distribution
+                    if 'vulnerability_category' in merged_data.columns:
+                        vuln_counts = merged_data['vulnerability_category'].value_counts()
+                        fig = px.bar(
+                            x=vuln_counts.index,
+                            y=vuln_counts.values,
+                            color=vuln_counts.index,
+                            color_discrete_map={
+                                'Low': '#2ecc71',
+                                'Medium': '#f39c12', 
+                                'High': '#e74c3c',
+                                'Critical': '#8b0000'
+                            },
+                            title='Climate Vulnerability Distribution',
+                            labels={'x': 'Vulnerability Category', 'y': 'Number of Countries'}
                         )
-                
-                with col_metrics2:
-                    if 'vulnerability_score' in country_info:
-                        vulnerability_score = country_info['vulnerability_score']
-                        st.metric(
-                            "Vulnerability Score", 
-                            f"{vulnerability_score:.2f}"
-                        )
-                
-                # Show risk assessment
-                if 'vulnerability_category' in country_info:
-                    category = country_info['vulnerability_category']
-                    st.metric("Risk Category", category)
-                    
-                    # Enhanced risk assessment with warming context
-                    if category in ['High', 'Critical']:
-                        if 'warming_rate_c_per_decade' in country_info and country_info['warming_rate_c_per_decade'] > 0.2:
-                            st.error("🚨 CRITICAL: High vulnerability + rapid warming")
-                            st.write("**Urgent adaptation funding needed**")
-                        else:
-                            st.error("🚨 High climate vulnerability detected")
-                            st.write("**Priority for adaptation funding**")
-                    elif category == 'Medium':
-                        if 'warming_rate_c_per_decade' in country_info and country_info['warming_rate_c_per_decade'] > 0.25:
-                            st.warning("⚠️ Moderate vulnerability + rapid warming")
-                            st.write("**Monitor closely and plan adaptation**")
-                        else:
-                            st.warning("⚠️ Moderate climate vulnerability")
-                            st.write("**Monitor and plan adaptation**")
+                        st.plotly_chart(fig, use_container_width=True)
                     else:
-                        st.success("✅ Lower climate vulnerability")
-                        st.write("**Focus on mitigation**")
-                else:
-                    st.info("Risk category not available")
+                        st.info("Vulnerability category data not available")
                     
-            except Exception as vuln_error:
-                st.error(f"Error displaying vulnerability info: {vuln_error}")
-            
+                    # Top vulnerable countries
+                    if 'vulnerability_score' in merged_data.columns:
+                        top_vulnerable = merged_data.nlargest(10, 'vulnerability_score')
+                        fig2 = px.bar(
+                            top_vulnerable,
+                            x='vulnerability_score',
+                            y='country',
+                            orientation='h',
+                            color='vulnerability_category' if 'vulnerability_category' in merged_data.columns else None,
+                            color_discrete_map={
+                                'Low': '#2ecc71',
+                                'Medium': '#f39c12', 
+                                'High': '#e74c3c',
+                                'Critical': '#8b0000'
+                            } if 'vulnerability_category' in merged_data.columns else None,
+                            title='Top 10 Most Vulnerable Countries',
+                            labels={'vulnerability_score': 'Vulnerability Score'}
+                        )
+                        st.plotly_chart(fig2, use_container_width=True)
+                    else:
+                        st.info("Vulnerability score data not available")
+                
+                with col2:
+                    try:
+                        country_info = merged_data[merged_data['country'] == selected_country].iloc[0]
+                        
+                        # Show both warming rate and vulnerability together
+                        st.subheader(f"🇺🇳 {selected_country}")
+                        
+                        col_metrics1, col_metrics2 = st.columns(2)
+                        
+                        with col_metrics1:
+                            if 'warming_rate_c_per_decade' in country_info:
+                                warming_rate = country_info['warming_rate_c_per_decade']
+                                st.metric(
+                                    "Warming Rate",
+                                    f"{warming_rate:.3f}°C/decade"
+                                )
+                        
+                        with col_metrics2:
+                            if 'vulnerability_score' in country_info:
+                                vulnerability_score = country_info['vulnerability_score']
+                                st.metric(
+                                    "Vulnerability Score", 
+                                    f"{vulnerability_score:.2f}"
+                                )
+                        
+                        # Show risk assessment
+                        if 'vulnerability_category' in country_info:
+                            category = country_info['vulnerability_category']
+                            st.metric("Risk Category", category)
+                            
+                            # Enhanced risk assessment with warming context
+                            if category in ['High', 'Critical']:
+                                if 'warming_rate_c_per_decade' in country_info and country_info['warming_rate_c_per_decade'] > 0.2:
+                                    st.error("🚨 CRITICAL: High vulnerability + rapid warming")
+                                    st.write("**Urgent adaptation funding needed**")
+                                else:
+                                    st.error("🚨 High climate vulnerability detected")
+                                    st.write("**Priority for adaptation funding**")
+                            elif category == 'Medium':
+                                if 'warming_rate_c_per_decade' in country_info and country_info['warming_rate_c_per_decade'] > 0.25:
+                                    st.warning("⚠️ Moderate vulnerability + rapid warming")
+                                    st.write("**Monitor closely and plan adaptation**")
+                                else:
+                                    st.warning("⚠️ Moderate climate vulnerability")
+                                    st.write("**Monitor and plan adaptation**")
+                            else:
+                                st.success("✅ Lower climate vulnerability")
+                                st.write("**Focus on mitigation**")
+                        else:
+                            st.info("Risk category not available")
+                            
+                    except Exception as vuln_error:
+                        st.error(f"Error displaying vulnerability info: {vuln_error}")
             else:
                 st.info("ℹ️ Vulnerability data not available - using sample data for demonstration")
                 # Show sample vulnerability visualization
