@@ -589,7 +589,7 @@ def show_global_analysis(global_data):
             st.write("Exception details:", str(e))
 
 def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
-    """Country analysis with vulnerability scoring - FIXED MERGE"""
+    """Country analysis with vulnerability scoring - COMPLETE FIXED VERSION"""
     st.header("🇺🇳 Country-Level Climate Analysis")
     
     try:
@@ -609,7 +609,6 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                 st.write("Sample data:")
                 st.dataframe(country_data.head(5))
                 st.write("Country column sample values:", country_data['country'].head(10).tolist())
-                st.write("Country column dtype:", country_data['country'].dtype)
             
             with col2:
                 st.subheader("Vulnerability Data")
@@ -618,7 +617,6 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                 st.dataframe(vulnerability_df.head(5))
                 if 'country' in vulnerability_df.columns:
                     st.write("Vulnerability country sample:", vulnerability_df['country'].head(10).tolist())
-                    st.write("Vulnerability country dtype:", vulnerability_df['country'].dtype)
         
         # ENHANCED DATA CLEANING AND MERGE
         try:
@@ -656,8 +654,6 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                 st.sidebar.write(f"Main data countries: {len(country_names_main)}")
                 st.sidebar.write(f"Vulnerability data countries: {len(country_names_vuln)}")
                 st.sidebar.write(f"Overlap: {len(country_names_main & country_names_vuln)}")
-                st.sidebar.write(f"Countries only in main: {country_names_main - country_names_vuln}")
-                st.sidebar.write(f"Countries only in vulnerability: {country_names_vuln - country_names_main}")
                 
                 # Perform the merge on cleaned country names
                 merged_data = country_clean.merge(
@@ -791,150 +787,148 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                             st.metric("Global Ranking", f"#{ranking}")
                     else:
                         st.warning("Warming rate not available for selected country")
-        with tab2:
-    st.subheader("🛡️ Climate Vulnerability Assessment")
-    
-    # Check if vulnerability data exists in merged data
-    has_vulnerability_data = any(col.startswith('vulnerability') for col in merged_data.columns)
-    
-    if has_vulnerability_data:
-        col1, col2 = st.columns([2, 1])
+                        
+                except Exception as country_error:
+                    st.error(f"Error displaying country info: {country_error}")
         
-        with col1:
-            # Vulnerability distribution
-            if 'vulnerability_category' in merged_data.columns:
-                vuln_counts = merged_data['vulnerability_category'].value_counts()
+        with tab2:
+            st.subheader("🛡️ Climate Vulnerability Assessment")
+            
+            # Check if vulnerability data exists in merged data
+            has_vulnerability_data = any(col.startswith('vulnerability') for col in merged_data.columns)
+            
+            if has_vulnerability_data:
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    # Vulnerability distribution
+                    if 'vulnerability_category' in merged_data.columns:
+                        vuln_counts = merged_data['vulnerability_category'].value_counts()
+                        fig = px.bar(
+                            x=vuln_counts.index,
+                            y=vuln_counts.values,
+                            color=vuln_counts.index,
+                            color_discrete_map={
+                                'Low': '#2ecc71',
+                                'Medium': '#f39c12', 
+                                'High': '#e74c3c',
+                                'Critical': '#8b0000'
+                            },
+                            title='Climate Vulnerability Distribution',
+                            labels={'x': 'Vulnerability Category', 'y': 'Number of Countries'}
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Vulnerability category data not available")
+                    
+                    # Top vulnerable countries
+                    if 'vulnerability_score' in merged_data.columns:
+                        top_vulnerable = merged_data.nlargest(10, 'vulnerability_score')
+                        fig2 = px.bar(
+                            top_vulnerable,
+                            x='vulnerability_score',
+                            y='country',
+                            orientation='h',
+                            color='vulnerability_category' if 'vulnerability_category' in merged_data.columns else None,
+                            color_discrete_map={
+                                'Low': '#2ecc71',
+                                'Medium': '#f39c12', 
+                                'High': '#e74c3c',
+                                'Critical': '#8b0000'
+                            } if 'vulnerability_category' in merged_data.columns else None,
+                            title='Top 10 Most Vulnerable Countries',
+                            labels={'vulnerability_score': 'Vulnerability Score'}
+                        )
+                        st.plotly_chart(fig2, use_container_width=True)
+                    else:
+                        st.info("Vulnerability score data not available")
+                
+                with col2:
+                    try:
+                        country_info = merged_data[merged_data['country'] == selected_country].iloc[0]
+                        
+                        if 'vulnerability_score' in country_info:
+                            st.metric("Vulnerability Score", f"{country_info['vulnerability_score']:.2f}")
+                        else:
+                            st.info("Vulnerability score not available")
+                        
+                        if 'vulnerability_category' in country_info:
+                            st.metric("Risk Category", country_info['vulnerability_category'])
+                            
+                            # Show risk assessment
+                            category = country_info['vulnerability_category']
+                            if category in ['High', 'Critical']:
+                                st.error("🚨 High climate vulnerability detected")
+                                st.write("**Priority for adaptation funding**")
+                            elif category == 'Medium':
+                                st.warning("⚠️ Moderate climate vulnerability")
+                                st.write("**Monitor and plan adaptation**")
+                            else:
+                                st.success("✅ Lower climate vulnerability")
+                                st.write("**Focus on mitigation**")
+                        else:
+                            st.info("Risk category not available")
+                            
+                    except Exception as vuln_error:
+                        st.error(f"Error displaying vulnerability info: {vuln_error}")
+            
+            else:
+                st.info("ℹ️ Vulnerability data not available - using sample data for demonstration")
+                # Show sample vulnerability visualization
+                sample_vuln = pd.DataFrame({
+                    'category': ['Low', 'Medium', 'High', 'Critical'],
+                    'count': [60, 85, 65, 32]
+                })
+                
                 fig = px.bar(
-                    x=vuln_counts.index,
-                    y=vuln_counts.values,
-                    color=vuln_counts.index,
+                    sample_vuln,
+                    x='category',
+                    y='count',
+                    color='category',
                     color_discrete_map={
                         'Low': '#2ecc71',
                         'Medium': '#f39c12', 
                         'High': '#e74c3c',
                         'Critical': '#8b0000'
                     },
-                    title='Climate Vulnerability Distribution',
-                    labels={'x': 'Vulnerability Category', 'y': 'Number of Countries'}
+                    title='Sample Vulnerability Distribution',
+                    labels={'category': 'Vulnerability Category', 'count': 'Number of Countries'}
                 )
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Vulnerability category data not available")
+        
+        with tab3:
+            st.subheader("📈 Data Quality Analysis")
             
-            # Top vulnerable countries
-            if 'vulnerability_score' in merged_data.columns:
-                top_vulnerable = merged_data.nlargest(10, 'vulnerability_score')
-                fig2 = px.bar(
-                    top_vulnerable,
-                    x='vulnerability_score',
-                    y='country',
-                    orientation='h',
-                    color='vulnerability_category' if 'vulnerability_category' in merged_data.columns else None,
-                    color_discrete_map={
-                        'Low': '#2ecc71',
-                        'Medium': '#f39c12', 
-                        'High': '#e74c3c',
-                        'Critical': '#8b0000'
-                    } if 'vulnerability_category' in merged_data.columns else None,
-                    title='Top 10 Most Vulnerable Countries',
-                    labels={'vulnerability_score': 'Vulnerability Score'}
-                )
-                st.plotly_chart(fig2, use_container_width=True)
-            else:
-                st.info("Vulnerability score data not available")
-        
-        with col2:
-            try:
-                country_info = merged_data[merged_data['country'] == selected_country].iloc[0]
-                
-                if 'vulnerability_score' in country_info:
-                    st.metric("Vulnerability Score", f"{country_info['vulnerability_score']:.2f}")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # R-squared distribution
+                if 'r_squared' in merged_data.columns:
+                    fig = px.histogram(
+                        merged_data,
+                        x='r_squared',
+                        title='R-squared Distribution (Data Quality)',
+                        labels={'r_squared': 'R-squared Value'},
+                        color_discrete_sequence=['#3498db']
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.info("Vulnerability score not available")
-                
-                if 'vulnerability_category' in country_info:
-                    st.metric("Risk Category", country_info['vulnerability_category'])
-                    
-                    # Show risk assessment
-                    category = country_info['vulnerability_category']
-                    if category in ['High', 'Critical']:
-                        st.error("🚨 High climate vulnerability detected")
-                        st.write("**Priority for adaptation funding**")
-                    elif category == 'Medium':
-                        st.warning("⚠️ Moderate climate vulnerability")
-                        st.write("**Monitor and plan adaptation**")
-                    else:
-                        st.success("✅ Lower climate vulnerability")
-                        st.write("**Focus on mitigation**")
+                    st.info("R-squared data not available")
+            
+            with col2:
+                # Data points distribution
+                if 'data_points' in merged_data.columns:
+                    fig = px.histogram(
+                        merged_data,
+                        x='data_points',
+                        title='Data Points Distribution',
+                        labels={'data_points': 'Number of Data Points'},
+                        color_discrete_sequence=['#2ecc71']
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.info("Risk category not available")
-                    
-            except Exception as vuln_error:
-                st.error(f"Error displaying vulnerability info: {vuln_error}")
-    
-    else:
-        st.info("ℹ️ Vulnerability data not available - using sample data for demonstration")
-        # Show sample vulnerability visualization
-        sample_vuln = pd.DataFrame({
-            'category': ['Low', 'Medium', 'High', 'Critical'],
-            'count': [60, 85, 65, 32]
-        })
-        
-        fig = px.bar(
-            sample_vuln,
-            x='category',
-            y='count',
-            color='category',
-            color_discrete_map={
-                'Low': '#2ecc71',
-                'Medium': '#f39c12', 
-                'High': '#e74c3c',
-                'Critical': '#8b0000'
-            },
-            title='Sample Vulnerability Distribution',
-            labels={'category': 'Vulnerability Category', 'count': 'Number of Countries'}
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-with tab3:
-    st.subheader("📈 Data Quality Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # R-squared distribution
-        if 'r_squared' in merged_data.columns:
-            fig = px.histogram(
-                merged_data,
-                x='r_squared',
-                title='R-squared Distribution (Data Quality)',
-                labels={'r_squared': 'R-squared Value'},
-                color_discrete_sequence=['#3498db']
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("R-squared data not available")
-    
-    with col2:
-        # Data points distribution
-        if 'data_points' in merged_data.columns:
-            fig = px.histogram(
-                merged_data,
-                x='data_points',
-                title='Data Points Distribution',
-                labels={'data_points': 'Number of Data Points'},
-                color_discrete_sequence=['#2ecc71']
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Data points information not available")
-                        
-                except Exception as country_error:
-                    st.error(f"Error displaying country info: {country_error}")
-        
-        # Continue with the rest of your tabs...
-        # [Keep the rest of your tab2 and tab3 code from the previous version]
-        
+                    st.info("Data points information not available")
+                
     except Exception as e:
         st.error(f"Error in country analysis: {e}")
         with st.expander("🔧 Technical Error Details"):
@@ -945,7 +939,6 @@ with tab3:
             st.write("Shape:", country_data.shape)
             st.write("First 3 rows:")
             st.dataframe(country_data.head(3))
-
 def show_urban_analysis(urban_data):
     """Level 3: Urban-Level Analysis"""
     st.header("🏙️ Urban Climate Analysis")
