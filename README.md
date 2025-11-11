@@ -29,3 +29,14 @@ The **Multi-Scale Climate Dashboard** is an advanced web application that provid
 </table>
 
 </div>
+
+<div align="center">
+
+*A Comprehensive Analysis of Climate Change Across Global, National, and Urban Scales*
+
+<img src="https://img.shields.io/badge/Climate-Science-blue" alt="Climate Science">
+<img src="https://img.shields.io/badge/Built%20with-Streamlit-red" alt="Built with Streamlit">
+<img src="https://img.shields.io/badge/Python-3.8%2B-green" alt="Python 3.8+">
+<img src="https://img.shields.io/badge/🌍-Live%20Demo-brightgreen" alt="Live Demo">
+
+</div>
