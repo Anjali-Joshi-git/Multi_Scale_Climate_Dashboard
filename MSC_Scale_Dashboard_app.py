@@ -707,6 +707,19 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                 st.warning("No 'country' column in vulnerability data - using country data only")
                 merged_data = country_clean
             
+            # ADD DIAGNOSTICS FOR SUCCESSFUL MERGE
+            st.sidebar.write("🔍 POST-MERGE VULNERABILITY CHECK")
+            st.sidebar.write("Vulnerability columns in merged data:", [col for col in merged_data.columns if 'vulnerability' in col.lower()])
+            if any('vulnerability' in col.lower() for col in merged_data.columns):
+                vuln_cols = [col for col in merged_data.columns if 'vulnerability' in col.lower()]
+                st.sidebar.write("Vulnerability data sample:")
+                for col in vuln_cols:
+                    st.sidebar.write(f"{col}: {merged_data[col].notna().sum()} non-null values")
+                    if merged_data[col].notna().sum() > 0:
+                        st.sidebar.write(f"  Sample values: {merged_data[col].dropna().head(3).tolist()}")
+            else:
+                st.sidebar.write("❌ No vulnerability columns found in merged data")
+
             st.sidebar.write("✅ Merge successful")
             st.sidebar.write("Merged data shape:", merged_data.shape)
             st.sidebar.write("Merged columns:", list(merged_data.columns))
@@ -721,6 +734,19 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
             # Add empty vulnerability columns to maintain structure
             merged_data['vulnerability_score'] = None
             merged_data['vulnerability_category'] = None
+            
+            # ADD DIAGNOSTIC CODE IN EXCEPTION CASE
+            st.sidebar.write("🔍 POST-MERGE VULNERABILITY CHECK (FALLBACK)")
+            st.sidebar.write("Vulnerability columns in merged data:", [col for col in merged_data.columns if 'vulnerability' in col.lower()])
+            if any('vulnerability' in col.lower() for col in merged_data.columns):
+                vuln_cols = [col for col in merged_data.columns if 'vulnerability' in col.lower()]
+                st.sidebar.write("Vulnerability data sample:")
+                for col in vuln_cols:
+                    st.sidebar.write(f"{col}: {merged_data[col].notna().sum()} non-null values")
+                    if merged_data[col].notna().sum() > 0:
+                        st.sidebar.write(f"  Sample values: {merged_data[col].dropna().head(3).tolist()}")
+            else:
+                st.sidebar.write("❌ No vulnerability columns found in merged data (using fallback)")
         
         st.success(f"✅ Successfully loaded data for {len(merged_data)} countries")
         
