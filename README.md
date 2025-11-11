@@ -40,3 +40,8 @@ The **Multi-Scale Climate Dashboard** is an advanced web application that provid
 <img src="https://img.shields.io/badge/🌍-Live%20Demo-brightgreen" alt="Live Demo">
 
 </div>
+
+<div>
+  <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?ixlib=rb-4.0.3&w=600" alt="World Map" width="600" height="300">
+
+</div>  
