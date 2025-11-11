@@ -266,33 +266,43 @@ def load_data():
             'warming_rate_c_per_decade': warming_rates
         })
     
-    # Level 3: Urban data
+    # Level 3: Urban data - FIXED VERSION WITH PROPER ERROR HANDLING
     try:
         urban_data = pd.read_csv('city_warming_rates.csv')
-    
-    # FIX: Handle the case where all data is in one column
-    if len(urban_data.columns) == 1 and urban_data.iloc[0, 0].startswith('city,country'):
-        st.info("🔄 Fixing urban data format...")
-        first_col = urban_data.columns[0]
-        split_data = urban_data[first_col].str.split(',', expand=True)
         
-        if split_data.shape[0] > 0:
-            new_columns = split_data.iloc[0].str.strip()
-            split_data = split_data[1:]
-            split_data.columns = new_columns
+        st.sidebar.header("🔍 URBAN DATA STRUCTURE")
+        st.sidebar.write("Original columns:", list(urban_data.columns))
+        
+        # FIX CSV FORMATTING ISSUE - Handle the case where all data is in one column
+        if len(urban_data.columns) == 1 and urban_data.iloc[0, 0].startswith('city,country'):
+            st.info("🔄 Fixing urban data format...")
+            first_col = urban_data.columns[0]
+            split_data = urban_data[first_col].str.split(',', expand=True)
             
-            # Convert numeric columns
-            numeric_columns = ['warming_rate_c_per_decade', 'r_squared', 'data_points', 'total_months', 
-                             'start_year', 'end_year', 'mean_temperature']
-            for col in numeric_columns:
-                if col in split_data.columns:
-                    split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
-            
-            urban_data = split_data.reset_index(drop=True)
-            st.success("✅ Fixed urban data format")
-    
-    st.success("✅ Loaded urban-level data")
-    data['urban'] = urban_data
+            if split_data.shape[0] > 0:
+                # Set the first row as column names
+                new_columns = split_data.iloc[0].str.strip()
+                split_data = split_data[1:]  # Remove the header row from data
+                split_data.columns = new_columns
+                
+                # Convert numeric columns
+                numeric_columns = ['warming_rate_c_per_decade', 'r_squared', 'data_points', 'total_months', 
+                                 'start_year', 'end_year', 'mean_temperature']
+                
+                for col in numeric_columns:
+                    if col in split_data.columns:
+                        split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
+                
+                urban_data = split_data.reset_index(drop=True)
+                st.success("✅ Successfully fixed urban data format")
+        
+        st.sidebar.write("Processed urban columns:", list(urban_data.columns))
+        st.sidebar.write("Urban data sample:")
+        st.sidebar.dataframe(urban_data.head(3))
+        
+        st.success("✅ Loaded urban-level data")
+        data['urban'] = urban_data
+        
     except Exception as e:
         st.error(f"Error loading urban data: {e}")
         st.warning("Using sample urban data")
