@@ -288,74 +288,110 @@ def load_data():
 
 @st.cache_data  
 def load_vulnerability_data():
-    """Load vulnerability results with proper CSV parsing"""
+    """Load vulnerability results with robust CSV parsing"""
     try:
         vulnerability_df = pd.read_csv('vulnerability_results.csv')
         
         st.sidebar.header("🔍 VULNERABILITY DATA DEBUG")
         st.sidebar.write("Raw vulnerability shape:", vulnerability_df.shape)
         st.sidebar.write("Raw vulnerability columns:", list(vulnerability_df.columns))
+        st.sidebar.write("First row sample:", vulnerability_df.iloc[0].tolist() if len(vulnerability_df) > 0 else "No data")
         
         # FIX CSV FORMATTING ISSUE - All columns are in one string
         if len(vulnerability_df.columns) == 1:
             st.info("🔄 Fixing vulnerability data format...")
             first_col = vulnerability_df.columns[0]
             
-            # Check if this is the header row issue
-            if 'country,warming_rate' in vulnerability_df.iloc[0, 0]:
-                st.sidebar.write("Detected malformed vulnerability CSV header")
-                
-                # Split the single column into proper columns
-                split_data = vulnerability_df[first_col].str.split(',', expand=True)
-                
-                # The first row should be the actual column names
-                if len(split_data) > 0:
-                    # Use first row as column names
-                    new_columns = split_data.iloc[0].tolist()
-                    vulnerability_df = split_data.iloc[1:].copy()
-                    vulnerability_df.columns = new_columns
-                    
-                    # Convert numeric columns
-                    numeric_cols = ['warming_rate_c_per_decade', 'r_squared', 'data_points', 'mean_temp', 
-                                   'warming_norm', 'quality_penalty', 'coverage_penalty', 'vulnerability_score']
-                    for col in numeric_cols:
-                        if col in vulnerability_df.columns:
-                            vulnerability_df[col] = pd.to_numeric(vulnerability_df[col], errors='coerce')
-                    
-                    st.success("✅ Fixed vulnerability data format")
-                    st.sidebar.write("Fixed vulnerability columns:", list(vulnerability_df.columns))
-                    st.sidebar.write("Fixed vulnerability shape:", vulnerability_df.shape)
+            # Check the content of the first row to understand the structure
+            first_row = vulnerability_df.iloc[0, 0] if len(vulnerability_df) > 0 else ""
+            st.sidebar.write("First row content:", first_row)
+            
+            # Split the single column into proper columns
+            split_data = vulnerability_df[first_col].str.split(',', expand=True)
+            st.sidebar.write("Split data shape:", split_data.shape)
+            st.sidebar.write("Split columns sample:", split_data.iloc[0].tolist() if len(split_data) > 0 else "No data")
+            
+            # Check if first row contains column headers
+            if split_data.shape[1] > 1 and any('country' in str(cell).lower() for cell in split_data.iloc[0]):
+                st.sidebar.write("Detected header row in first position")
+                # Use first row as column names
+                new_columns = split_data.iloc[0].tolist()
+                vulnerability_df = split_data.iloc[1:].copy()
+                vulnerability_df.columns = new_columns
+            else:
+                # Use generic column names
+                st.sidebar.write("Using generic column names")
+                vulnerability_df = split_data.copy()
+                vulnerability_df.columns = [f'col_{i}' for i in range(split_data.shape[1])]
+            
+            st.success("✅ Fixed vulnerability data format")
+            st.sidebar.write("Fixed vulnerability columns:", list(vulnerability_df.columns))
+            st.sidebar.write("Fixed vulnerability shape:", vulnerability_df.shape)
+            st.sidebar.write("Sample of fixed data:")
+            st.sidebar.dataframe(vulnerability_df.head(3))
+        
+        # Clean column names and map to expected names
+        column_mapping = {}
+        for col in vulnerability_df.columns:
+            col_lower = str(col).lower()
+            if 'country' in col_lower:
+                column_mapping[col] = 'country'
+            elif 'vulnerability_score' in col_lower or 'vuln_score' in col_lower:
+                column_mapping[col] = 'vulnerability_score'
+            elif 'vulnerability_category' in col_lower or 'vuln_category' in col_lower or 'risk' in col_lower:
+                column_mapping[col] = 'vulnerability_category'
+        
+        if column_mapping:
+            vulnerability_df = vulnerability_df.rename(columns=column_mapping)
+            st.sidebar.write("Mapped columns:", column_mapping)
+        
+        # Convert numeric columns
+        if 'vulnerability_score' in vulnerability_df.columns:
+            vulnerability_df['vulnerability_score'] = pd.to_numeric(vulnerability_df['vulnerability_score'], errors='coerce')
         
         # Ensure we have the required vulnerability columns
         if 'vulnerability_score' not in vulnerability_df.columns:
-            st.warning("⚠️ Vulnerability score column missing - creating sample data")
-            # Create sample vulnerability data
-            try:
-                country_data = pd.read_csv('country_warming_rates.csv')
-                # Extract country names
-                if len(country_data.columns) == 1:
-                    split_data = country_data.iloc[:, 0].str.split(',', expand=True)
-                    countries = split_data[0].dropna().unique().tolist()
-                else:
-                    countries = country_data['country'].unique().tolist()
-            except:
-                countries = ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Russia', 'Iran', 'Canada']
+            st.warning("⚠️ Vulnerability score column missing after processing")
             
-            vulnerability_scores = np.random.uniform(0.3, 0.9, len(countries))
-            
-            vulnerability_df = pd.DataFrame({
-                'country': countries,
-                'vulnerability_score': vulnerability_scores,
-            })
-            
-            # Create categories based on scores
+            # Try to find any numeric column that could be vulnerability scores
+            numeric_cols = vulnerability_df.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) > 0:
+                # Use the first numeric column as vulnerability score
+                vulnerability_df = vulnerability_df.rename(columns={numeric_cols[0]: 'vulnerability_score'})
+                st.info(f"🔧 Using numeric column '{numeric_cols[0]}' as vulnerability score")
+            else:
+                st.info("Creating sample vulnerability data")
+                # Create sample vulnerability data
+                try:
+                    country_data = pd.read_csv('country_warming_rates.csv')
+                    # Extract country names
+                    if len(country_data.columns) == 1:
+                        split_country = country_data.iloc[:, 0].str.split(',', expand=True)
+                        countries = split_country[0].dropna().unique().tolist()
+                    else:
+                        countries = country_data['country'].unique().tolist()
+                except:
+                    countries = ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Russia', 'Iran', 'Canada']
+                
+                vulnerability_scores = np.random.uniform(0.3, 0.9, len(countries))
+                
+                vulnerability_df = pd.DataFrame({
+                    'country': countries,
+                    'vulnerability_score': vulnerability_scores,
+                })
+        
+        # Create vulnerability categories if they don't exist
+        if 'vulnerability_category' not in vulnerability_df.columns and 'vulnerability_score' in vulnerability_df.columns:
             vulnerability_df['vulnerability_category'] = pd.cut(
                 vulnerability_df['vulnerability_score'],
                 bins=[0, 0.4, 0.6, 0.8, 1],
                 labels=['Low', 'Medium', 'High', 'Critical']
             )
-        else:
-            st.success("✅ Loaded pre-calculated vulnerability scores")
+            st.info("🔧 Created vulnerability categories from scores")
+        
+        st.success("✅ Loaded vulnerability data")
+        st.sidebar.write("Final vulnerability columns:", list(vulnerability_df.columns))
+        st.sidebar.write("Final vulnerability shape:", vulnerability_df.shape)
         
         return vulnerability_df
         
