@@ -1037,10 +1037,39 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
             st.dataframe(country_data.head(3))
 
 def show_urban_analysis(urban_data):
-    """Level 3: Urban-Level Analysis - FIXED VERSION"""
+    """Level 3: Urban-Level Analysis - FIXED FOR SINGLE COLUMN DATA"""
     st.header("🏙️ Urban Climate Analysis")
     
     try:
+        # FIX: Handle the case where all data is in one column with header as column name
+        if len(urban_data.columns) == 1 and 'city,country,warming_rate_c_per_decade' in urban_data.columns[0]:
+            st.info("🔄 Processing urban data format...")
+            
+            # Get the single column name
+            single_col_name = urban_data.columns[0]
+            
+            # Split each row by commas to create proper columns
+            split_data = urban_data[single_col_name].str.split(',', expand=True)
+            
+            # The first row contains the actual headers
+            if split_data.shape[0] > 0:
+                # Set column names from first row
+                new_columns = split_data.iloc[0].str.strip()
+                # Remove the header row from data
+                split_data = split_data[1:].reset_index(drop=True)
+                split_data.columns = new_columns
+                
+                # Convert numeric columns
+                numeric_columns = ['warming_rate_c_per_decade', 'r_squared', 'data_points', 'total_months', 
+                                 'start_year', 'end_year', 'mean_temperature']
+                
+                for col in numeric_columns:
+                    if col in split_data.columns:
+                        split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
+                
+                urban_data = split_data
+                st.success("✅ Successfully processed urban data")
+        
         # Display raw data structure for debugging
         with st.expander("🔍 Urban Data Structure"):
             st.write("Columns:", list(urban_data.columns))
@@ -1051,19 +1080,18 @@ def show_urban_analysis(urban_data):
             
             if 'warming_rate_c_per_decade' in urban_data.columns:
                 st.write(f"Warming range: {urban_data['warming_rate_c_per_decade'].min():.3f} to {urban_data['warming_rate_c_per_decade'].max():.3f}°C/decade")
+            else:
+                st.warning("warming_rate_c_per_decade column not found")
         
-        # Ensure we have the required columns
-        required_columns = ['city', 'warming_rate_c_per_decade']
-        missing_columns = [col for col in required_columns if col not in urban_data.columns]
-        
-        if missing_columns:
-            st.error(f"❌ Missing required columns: {missing_columns}")
-            st.warning("Some visualizations may not work properly")
+        # Check if we have the required columns after processing
+        if 'city' not in urban_data.columns or 'warming_rate_c_per_decade' not in urban_data.columns:
+            st.error("❌ Required columns still missing after processing")
+            st.warning("Trying alternative processing...")
             
-            # Show what columns we do have
-            st.info("Available columns:")
-            for col in urban_data.columns:
-                st.write(f"- {col}: {urban_data[col].dtype}")
+            # Alternative processing: Check if first row contains data
+            if len(urban_data) > 0:
+                first_row = urban_data.iloc[0]
+                st.write("First row content:", first_row)
         
         # Urban warming intensity distribution
         if 'warming_intensity' in urban_data.columns:
@@ -1095,13 +1123,18 @@ def show_urban_analysis(urban_data):
             with col2:
                 st.subheader("📈 Urban Warming Stats")
                 total_cities = len(urban_data)
-                extreme_cities = len(urban_data[urban_data['warming_intensity'] == 'Extreme'])
+                if 'warming_intensity' in urban_data.columns:
+                    extreme_cities = len(urban_data[urban_data['warming_intensity'] == 'Extreme'])
+                else:
+                    extreme_cities = 0
+                    
                 st.metric("Total Cities Analyzed", total_cities)
                 st.metric("Extreme Warming Cities", extreme_cities)
                 
                 if 'warming_rate_c_per_decade' in urban_data.columns:
                     max_warming = urban_data['warming_rate_c_per_decade'].max()
-                    fastest_city = urban_data.loc[urban_data['warming_rate_c_per_decade'].idxmax(), 'city']
+                    fastest_city_idx = urban_data['warming_rate_c_per_decade'].idxmax()
+                    fastest_city = urban_data.loc[fastest_city_idx, 'city'] if 'city' in urban_data.columns else "Unknown"
                     st.metric(
                         "Fastest Warming City", 
                         f"{max_warming:.3f}°C/decade",
@@ -1216,6 +1249,17 @@ def show_urban_analysis(urban_data):
                     )
             else:
                 st.warning("No valid warming rate data available for visualization")
+        else:
+            st.warning("Cannot display urban hotspots - missing city or warming rate data")
+            
+            # Show what data we do have
+            available_cols = []
+            if 'city' in urban_data.columns:
+                available_cols.append('city')
+                st.info(f"Available cities: {list(urban_data['city'].head(10))}")
+            if 'warming_rate_c_per_decade' in urban_data.columns:
+                available_cols.append('warming_rate_c_per_decade')
+                st.info(f"Warming rates available: {urban_data['warming_rate_c_per_decade'].describe()}")
         
         # Urban statistics
         if 'warming_rate_c_per_decade' in urban_data.columns:
@@ -1280,40 +1324,31 @@ def show_urban_analysis(urban_data):
                         st.write(f"**{country}:** {row['mean']:.3f}°C/decade ({int(row['count'])} cities)")
             else:
                 # Fallback to static patterns
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.write("**Northeast China Cluster:**")
-                    st.write("Harbin, Changchun, Shenyang")
-                    st.write("Rapid industrial warming")
-                
-                with col2:
-                    st.write("**Middle East Hotspots:**")
-                    st.write("Mashhad, Baghdad, Tehran")
-                    st.write("Arid climate amplification")
-                
-                with col3:
-                    st.write("**Northern Cities:**")
-                    st.write("Moscow, Montreal, Toronto")
-                    st.write("Cold climate sensitivity")
+                show_static_geographic_patterns()
         else:
             # Fallback to static patterns
-            col1, col2, col3 = st.columns(3)
+            show_static_geographic_patterns()
+        
+        # Data quality information
+        if any(col in urban_data.columns for col in ['r_squared', 'data_points', 'data_quality']):
+            st.subheader("📈 Data Quality Information")
             
-            with col1:
-                st.write("**Northeast China Cluster:**")
-                st.write("Harbin, Changchun, Shenyang")
-                st.write("Rapid industrial warming")
+            quality_cols = st.columns(3)
             
-            with col2:
-                st.write("**Middle East Hotspots:**")
-                st.write("Mashhad, Baghdad, Tehran")
-                st.write("Arid climate amplification")
+            if 'r_squared' in urban_data.columns:
+                with quality_cols[0]:
+                    avg_r2 = pd.to_numeric(urban_data['r_squared'], errors='coerce').mean()
+                    st.metric("Average R-squared", f"{avg_r2:.3f}")
             
-            with col3:
-                st.write("**Northern Cities:**")
-                st.write("Moscow, Montreal, Toronto")
-                st.write("Cold climate sensitivity")
+            if 'data_points' in urban_data.columns:
+                with quality_cols[1]:
+                    total_points = pd.to_numeric(urban_data['data_points'], errors='coerce').sum()
+                    st.metric("Total Data Points", f"{int(total_points):,}")
+            
+            if 'data_quality' in urban_data.columns:
+                with quality_cols[2]:
+                    quality_counts = urban_data['data_quality'].value_counts()
+                    st.metric("Most Common Quality", quality_counts.index[0] if len(quality_counts) > 0 else "N/A")
                 
     except Exception as e:
         st.error(f"Error in urban analysis: {e}")
@@ -1326,6 +1361,29 @@ def show_urban_analysis(urban_data):
             st.write("Urban data shape:", urban_data.shape)
             st.write("First 3 rows:")
             st.dataframe(urban_data.head(3))
+            
+            # Show raw data for debugging
+            st.write("Raw data sample:")
+            st.write(urban_data.iloc[0] if len(urban_data) > 0 else "No data")
+
+def show_static_geographic_patterns():
+    """Show static geographic patterns as fallback"""
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write("**Northeast China Cluster:**")
+        st.write("Harbin, Changchun, Shenyang")
+        st.write("Rapid industrial warming")
+    
+    with col2:
+        st.write("**Middle East Hotspots:**")
+        st.write("Mashhad, Baghdad, Tehran")
+        st.write("Arid climate amplification")
+    
+    with col3:
+        st.write("**Northern Cities:**")
+        st.write("Moscow, Montreal, Toronto")
+        st.write("Cold climate sensitivity")
 
 def show_cross_scale_comparison(global_data, country_data, urban_data):
     """Cross-scale comparisons - FIXED VERSION"""
