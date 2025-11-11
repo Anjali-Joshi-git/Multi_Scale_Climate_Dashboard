@@ -263,7 +263,7 @@ except Exception as e:
                              'Extreme', 'Fast', 'Fast', 'Fast', 'Extreme']
     })
     
-    return data
+return data
 
 @st.cache_data  
 def load_vulnerability_data():
