@@ -26,7 +26,7 @@ class ScientificForecaster:
         self._validate_data()
         self.initialize_model()
 
-     def _validate_data(self):
+    def _validate_data(self):
         """Validate that data has required columns"""
         required_cols = ['year', 'LandAverageTemperature', 'Seasonally Adjusted CO2 (ppm)']
         missing_cols = [col for col in required_cols if col not in self.historical_data.columns]
