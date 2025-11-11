@@ -288,18 +288,34 @@ def load_data():
 
 @st.cache_data  
 def load_vulnerability_data():
-    """Load vulnerability results with fallback"""
+    """Load vulnerability results with enhanced error handling"""
     try:
         vulnerability_df = pd.read_csv('vulnerability_results.csv')
+        
+        # Clean the vulnerability data
+        if 'country' in vulnerability_df.columns:
+            # Clean country names
+            vulnerability_df['country'] = vulnerability_df['country'].astype(str).str.strip()
+        
         st.success("✅ Loaded pre-calculated vulnerability scores")
         return vulnerability_df
-    except FileNotFoundError:
+        
+    except Exception as e:
+        st.error(f"Error loading vulnerability data: {e}")
         st.info("📝 Using sample vulnerability data")
         
-        # Create vulnerability data that matches the countries in our main dataset
+        # Create sample vulnerability data
         try:
             country_data = pd.read_csv('country_warming_rates.csv')
-            countries = country_data['country'].unique().tolist()
+            # Extract country names from the first column if needed
+            if len(country_data.columns) == 1:
+                split_data = country_data.iloc[:, 0].str.split(',', expand=True)
+                if split_data.shape[1] > 0:
+                    countries = split_data[0].dropna().unique().tolist()
+                else:
+                    countries = ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Russia', 'Iran', 'Canada']
+            else:
+                countries = country_data['country'].unique().tolist()
         except:
             countries = ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Russia', 'Iran', 'Canada']
         
