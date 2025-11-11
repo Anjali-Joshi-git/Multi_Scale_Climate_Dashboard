@@ -129,51 +129,97 @@ class ScientificForecaster:
 def load_data():
     """Load climate data for all three scales with robust error handling"""
     data = {}
+    import os
     
-    # Level 1: Global data - ENHANCED WITH COLUMN DETECTION
+    # COMPREHENSIVE FILE DIAGNOSTICS
+    st.sidebar.header("🔍 COMPREHENSIVE FILE DEBUG")
+    
+    # Check all data files
+    data_files = [
+        'modern_data_1971_2015.csv',
+        'country_warming_rates.csv', 
+        'city_warming_rates.csv',
+        'vulnerability_results.csv'
+    ]
+    
+    for file in data_files:
+        exists = os.path.exists(file)
+        status = "✅" if exists else "❌"
+        st.sidebar.write(f"{status} {file}")
+        
+        if exists:
+            try:
+                # Show file info
+                file_stats = os.stat(file)
+                st.sidebar.write(f"   Size: {file_stats.st_size} bytes")
+                
+                # Show first few rows and columns
+                if file.endswith('.csv'):
+                    df_sample = pd.read_csv(file, nrows=3)
+                    st.sidebar.write(f"   Columns: {list(df_sample.columns)}")
+                    st.sidebar.write(f"   Sample data:")
+                    st.sidebar.dataframe(df_sample)
+            except Exception as e:
+                st.sidebar.write(f"   Error reading: {e}")
+    
+    # Level 1: Global data - ENHANCED DEBUGGING
     try:
         global_data = pd.read_csv('modern_data_1971_2015.csv')
         
-        # DEBUG: Show what columns we actually have
-        st.sidebar.write("🔍 Global Data Columns Found:", list(global_data.columns))
+        # SHOW EXACT COLUMN NAMES
+        st.sidebar.header("🔍 GLOBAL DATA - RAW COLUMNS")
+        st.sidebar.write("ACTUAL COLUMNS:", list(global_data.columns))
+        st.sidebar.write("FIRST 3 ROWS:")
+        st.sidebar.dataframe(global_data.head(3))
         
-        # Auto-detect and map column names
+        # Enhanced column mapping with more variations
         column_mapping = {}
         
-        # Detect year column
-        year_candidates = ['Year', 'year', 'YEAR', 'Time', 'time', 'DATE', 'date']
+        # Detect year column - expanded list
+        year_candidates = ['Year', 'year', 'YEAR', 'Time', 'time', 'DATE', 'date', 
+                          'yr', 'Yr', 'annual', 'Annual', 'decade', 'Decade']
         for candidate in year_candidates:
             if candidate in global_data.columns:
                 column_mapping[candidate] = 'year'
+                st.sidebar.info(f"Found year column: {candidate} -> year")
                 break
         
-        # Detect temperature column
-        temp_candidates = ['LandAverageTemperature', 'Temperature', 'temperature', 'temp', 'TEMP', 
-                          'Land Average Temperature', 'Global Temperature', 'global_temperature']
+        # Detect temperature column - expanded list
+        temp_candidates = ['LandAverageTemperature', 'Temperature', 'temperature', 'temp', 'TEMP',
+                          'Land Average Temperature', 'Global Temperature', 'global_temperature',
+                          'temp_global', 'global_temp', 'mean_temp', 'Mean_Temp', 'anomaly', 'Anomaly']
         for candidate in temp_candidates:
             if candidate in global_data.columns:
                 column_mapping[candidate] = 'LandAverageTemperature'
+                st.sidebar.info(f"Found temperature column: {candidate} -> LandAverageTemperature")
                 break
         
-        # Detect CO2 column
-        co2_candidates = ['Seasonally Adjusted CO2 (ppm)', 'CO2', 'co2', 'carbon_dioxide', 
-                         'Carbon Dioxide', 'CO2_ppm', 'co2_ppm', 'CO2 (ppm)']
+        # Detect CO2 column - expanded list
+        co2_candidates = ['Seasonally Adjusted CO2 (ppm)', 'CO2', 'co2', 'carbon_dioxide',
+                         'Carbon Dioxide', 'CO2_ppm', 'co2_ppm', 'CO2 (ppm)', 'co2_ppm',
+                         'carbon', 'Carbon', 'co2_concentration', 'CO2_concentration']
         for candidate in co2_candidates:
             if candidate in global_data.columns:
                 column_mapping[candidate] = 'Seasonally Adjusted CO2 (ppm)'
+                st.sidebar.info(f"Found CO2 column: {candidate} -> Seasonally Adjusted CO2 (ppm)")
                 break
         
         # Apply renaming if we found matches
         if column_mapping:
             global_data = global_data.rename(columns=column_mapping)
-            st.info(f"🔧 Auto-renamed columns: {column_mapping}")
+            st.success(f"🔧 Auto-renamed columns: {column_mapping}")
+        else:
+            st.sidebar.error("❌ No column matches found!")
+            st.sidebar.write("Available columns:", list(global_data.columns))
         
         # Check if we have the required columns after renaming
         required_columns = ['year', 'LandAverageTemperature', 'Seasonally Adjusted CO2 (ppm)']
         missing_columns = [col for col in required_columns if col not in global_data.columns]
         
         if missing_columns:
-            st.warning(f"📝 Missing columns after renaming: {missing_columns}. Using sample data.")
+            st.error(f"❌ Missing required columns: {missing_columns}")
+            st.warning("Using sample data for global analysis")
+            
             # Create fallback data
             years = list(range(1971, 2016))
             global_data = pd.DataFrame({
@@ -197,20 +243,62 @@ def load_data():
             'Seasonally Adjusted CO2 (ppm)': co2
         })
     
-    # Level 2: Country data
+    # Level 2: Country data - ENHANCED WITH COLUMN VALIDATION
     try:
         country_data = pd.read_csv('country_warming_rates.csv')
+        
+        # DEBUG: Show country data structure
+        st.sidebar.header("🔍 COUNTRY DATA - RAW COLUMNS")
+        st.sidebar.write("ACTUAL COLUMNS:", list(country_data.columns))
+        st.sidebar.write("FIRST 3 ROWS:")
+        st.sidebar.dataframe(country_data.head(3))
+        
+        # Auto-detect and map country column names
+        country_column_mapping = {}
+        
+        # Detect country name column
+        country_candidates = ['country', 'Country', 'COUNTRY', 'nation', 'Nation', 
+                             'country_name', 'Country_Name', 'location', 'Location']
+        for candidate in country_candidates:
+            if candidate in country_data.columns:
+                country_column_mapping[candidate] = 'country'
+                st.sidebar.info(f"Found country column: {candidate} -> country")
+                break
+        
+        # Detect warming rate column
+        warming_candidates = ['warming_rate_c_per_decade', 'warming_rate', 'Warming Rate',
+                             'warming', 'Warming', 'rate', 'Rate', 'trend', 'Trend',
+                             'slope', 'Slope', 'change_rate', 'Change_Rate']
+        for candidate in warming_candidates:
+            if candidate in country_data.columns:
+                country_column_mapping[candidate] = 'warming_rate_c_per_decade'
+                st.sidebar.info(f"Found warming rate column: {candidate} -> warming_rate_c_per_decade")
+                break
+        
+        # Apply renaming
+        if country_column_mapping:
+            country_data = country_data.rename(columns=country_column_mapping)
+            st.info(f"🔧 Auto-renamed country columns: {country_column_mapping}")
+        
+        # Ensure required columns exist
+        if 'country' not in country_data.columns:
+            # If no country column found, use the first column as country names
+            first_col = country_data.columns[0]
+            country_data = country_data.rename(columns={first_col: 'country'})
+            st.warning(f"🔧 Using first column '{first_col}' as country names")
+        
+        if 'warming_rate_c_per_decade' not in country_data.columns:
+            # Try to find numeric columns that could be warming rates
+            numeric_cols = country_data.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) > 0:
+                country_data = country_data.rename(columns={numeric_cols[0]: 'warming_rate_c_per_decade'})
+                st.warning(f"🔧 Using numeric column '{numeric_cols[0]}' as warming rate")
+            else:
+                # Add default warming rate
+                country_data['warming_rate_c_per_decade'] = 0.3
+                st.warning("🔧 Added default warming rate column")
+        
         st.success("✅ Loaded country-level data")
-        
-        # Show raw data structure
-        with st.sidebar.expander("🔍 Raw Country Data"):
-            st.write("Columns:", list(country_data.columns))
-            st.write("Sample data:")
-            st.dataframe(country_data.head(3))
-            st.write(f"Data range: {len(country_data)} countries")
-            if 'warming_rate_c_per_decade' in country_data.columns:
-                st.write(f"Warming range: {country_data['warming_rate_c_per_decade'].min():.3f} to {country_data['warming_rate_c_per_decade'].max():.3f}°C/decade")
-        
         data['country'] = country_data
         
     except FileNotFoundError:
@@ -226,16 +314,6 @@ def load_data():
     try:
         urban_data = pd.read_csv('city_warming_rates.csv')
         st.success("✅ Loaded urban-level data")
-        
-        # Show raw data structure
-        with st.sidebar.expander("🔍 Raw Urban Data"):
-            st.write("Columns:", list(urban_data.columns))
-            st.write("Sample data:")
-            st.dataframe(urban_data.head(3))
-            st.write(f"Data range: {len(urban_data)} cities")
-            if 'warming_rate_c_per_decade' in urban_data.columns:
-                st.write(f"Warming range: {urban_data['warming_rate_c_per_decade'].min():.3f} to {urban_data['warming_rate_c_per_decade'].max():.3f}°C/decade")
-        
         data['urban'] = urban_data
         
     except FileNotFoundError:
