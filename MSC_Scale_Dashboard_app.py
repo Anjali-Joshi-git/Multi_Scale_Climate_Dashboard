@@ -21,7 +21,25 @@ class ScientificForecaster:
         self.model = None
         self.optimal_window = 15
         self.max_reliable_horizon = 15
+
+        # Validate data before initializing
+        self._validate_data()
         self.initialize_model()
+
+     def _validate_data(self):
+        """Validate that data has required columns"""
+        required_cols = ['year', 'LandAverageTemperature', 'Seasonally Adjusted CO2 (ppm)']
+        missing_cols = [col for col in required_cols if col not in self.historical_data.columns]
+        
+        if missing_cols:
+            st.warning(f"Missing columns in data: {missing_cols}. Using fallback data.")
+            # Create fallback data
+            years = list(range(1971, 2016))
+            self.historical_data = pd.DataFrame({
+                'year': years,
+                'LandAverageTemperature': [8.5 + 0.03 * (year-1971) for year in years],
+                'Seasonally Adjusted CO2 (ppm)': [320 + 1.7 * (year-1971) for year in years]
+            })
     
     def initialize_model(self):
         """Initialize with most recent 15-year window"""
@@ -217,10 +235,51 @@ def load_vulnerability_data():
         return vulnerability_df
 
 def show_global_analysis(global_data):
-    """Level 1: Global Climate Analysis"""
+    """Level 1: Global Climate Analysis - FIXED VERSION"""
     st.header("🌍 Global Climate Patterns")
     
     try:
+        # DEBUG: Show what data we actually have
+        with st.expander("🔍 Debug Global Data"):
+            st.write("Columns in global data:", list(global_data.columns))
+            st.write("First few rows:")
+            st.dataframe(global_data.head())
+            st.write("Data types:")
+            st.write(global_data.dtypes)
+        
+        # Check for required columns and rename if needed
+        required_columns = ['year', 'LandAverageTemperature', 'Seasonally Adjusted CO2 (ppm)']
+        
+        # Create column mapping for common variations
+        column_mapping = {}
+        if 'Year' in global_data.columns and 'year' not in global_data.columns:
+            column_mapping['Year'] = 'year'
+        if 'Land Average Temperature' in global_data.columns:
+            column_mapping['Land Average Temperature'] = 'LandAverageTemperature'
+        if 'CO2' in global_data.columns or 'co2' in global_data.columns:
+            co2_col = 'CO2' if 'CO2' in global_data.columns else 'co2'
+            column_mapping[co2_col] = 'Seasonally Adjusted CO2 (ppm)'
+        
+        # Apply renaming if needed
+        if column_mapping:
+            global_data = global_data.rename(columns=column_mapping)
+            st.info(f"🔧 Renamed columns: {column_mapping}")
+        
+        # Check if we have the required columns now
+        missing_columns = [col for col in required_columns if col not in global_data.columns]
+        if missing_columns:
+            st.error(f"❌ Missing required columns: {missing_columns}")
+            st.warning("Using fallback data for global analysis")
+            
+            # Create fallback data
+            years = list(range(1971, 2016))
+            global_data = pd.DataFrame({
+                'year': years,
+                'LandAverageTemperature': [8.5 + 0.03 * (year-1971) for year in years],
+                'Seasonally Adjusted CO2 (ppm)': [320 + 1.7 * (year-1971) for year in years]
+            })
+        
+        # Now proceed with the analysis
         forecaster = ScientificForecaster(global_data)
         
         # Create two columns for layout
@@ -239,7 +298,7 @@ def show_global_analysis(global_data):
             """)
             
             # Moved confidence indicator up
-            confidence_level, emoji, description = forecaster.get_prediction_confidence(2030)  # Default value
+            confidence_level, emoji, description = forecaster.get_prediction_confidence(2030)
             st.sidebar.markdown(f"**Default Confidence:** {emoji} {description}")
         
         with col_main:
@@ -255,7 +314,7 @@ def show_global_analysis(global_data):
             with col4:
                 st.metric("Current Temp", f"{forecaster.current_temp:.2f}°C")
             
-            # TARGET YEAR SLIDER - MOVED HERE
+            # TARGET YEAR SLIDER
             st.subheader("🎯 Projection Settings")
             
             col_slider1, col_slider2 = st.columns([2, 1])
@@ -361,28 +420,13 @@ def show_global_analysis(global_data):
             )
             st.plotly_chart(fig, use_container_width=True)
             
-            # Explanation
-            with st.expander("💡 Understanding the Projections"):
-                st.markdown("""
-                **How the model works:**
-                - Trained on 2001-2015 data (most recent 15-year window)
-                - Uses CO₂-temperature relationship to project future warming
-                - Different scenarios represent possible emission pathways
-                
-                **Confidence levels:**
-                - ✅ **High (1-5 years):** Strong historical correlation
-                - 🟡 **Medium (6-15 years):** Reasonable extrapolation  
-                - 🔴 **Low (16+ years):** Increasing uncertainty
-                
-                **Scenario descriptions:**
-                - **High Emissions:** +3.0 ppm/year (rapid fossil fuel growth)
-                - **Current Trend:** +2.5 ppm/year (current policies)
-                - **Climate Action:** +1.5 ppm/year (moderate action)
-                - **Paris Agreement:** +1.0 ppm/year (strong action)
-                """)
-        
     except Exception as e:
         st.error(f"Error in global analysis: {e}")
+        # Show more debug info
+        with st.expander("🔧 Technical Details"):
+            st.write("Global data columns:", list(global_data.columns))
+            st.write("Global data shape:", global_data.shape)
+            st.write("Exception details:", str(e))
 
 def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
     """Country analysis with vulnerability scoring"""
@@ -803,6 +847,16 @@ def show_cross_scale_comparison(global_data, country_data, urban_data):
         st.error(f"Error in cross-scale comparison: {e}")
 
 def main():
+    # DEBUG: Show what's being loaded
+    st.sidebar.header("🔍 Data Loading Debug")
+    
+    # Load all data
+    data = load_data()
+    
+    # Show what columns we actually got
+    st.sidebar.write("**Global Data Columns:**", list(data['global'].columns))
+    st.sidebar.write("**Country Data Columns:**", list(data['country'].columns))
+    st.sidebar.write("**Urban Data Columns:**", list(data['urban'].columns))
     #st.title("🌍 Multi-Scale Climate Dashboard")
     st.markdown("""
 <h1 style='text-align: center; font-family: "Arial", sans-serif; font-size: 48px; color: #2c3e50;'>
