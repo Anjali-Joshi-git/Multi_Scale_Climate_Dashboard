@@ -127,100 +127,85 @@ class ScientificForecaster:
 
 @st.cache_data
 def load_data():
-    """Load climate data for all three scales with robust error handling"""
+    """Load climate data with robust CSV formatting handling"""
     data = {}
     import os
     
-    # COMPREHENSIVE FILE DIAGNOSTICS
-    st.sidebar.header("🔍 COMPREHENSIVE FILE DEBUG")
-    
-    # Check all data files
-    data_files = [
-        'modern_data_1971_2015.csv',
-        'country_warming_rates.csv', 
-        'city_warming_rates.csv',
-        'vulnerability_results.csv'
-    ]
-    
-    for file in data_files:
-        exists = os.path.exists(file)
-        status = "✅" if exists else "❌"
-        st.sidebar.write(f"{status} {file}")
-        
-        if exists:
-            try:
-                # Show file info
-                file_stats = os.stat(file)
-                st.sidebar.write(f"   Size: {file_stats.st_size} bytes")
-                
-                # Show first few rows and columns
-                if file.endswith('.csv'):
-                    df_sample = pd.read_csv(file, nrows=3)
-                    st.sidebar.write(f"   Columns: {list(df_sample.columns)}")
-                    st.sidebar.write(f"   Sample data:")
-                    st.sidebar.dataframe(df_sample)
-            except Exception as e:
-                st.sidebar.write(f"   Error reading: {e}")
-    
-    # Level 1: Global data - ENHANCED DEBUGGING
+    # Level 1: Global data - FIXED CSV PARSING
     try:
-        global_data = pd.read_csv('modern_data_1971_2015.csv')
+        # Try different CSV parsing options
+        try:
+            # First try standard CSV reading
+            global_data = pd.read_csv('modern_data_1971_2015.csv')
+        except:
+            # If that fails, try with different parameters
+            global_data = pd.read_csv('modern_data_1971_2015.csv', encoding='latin-1')
         
-        # SHOW EXACT COLUMN NAMES
-        st.sidebar.header("🔍 GLOBAL DATA - RAW COLUMNS")
-        st.sidebar.write("ACTUAL COLUMNS:", list(global_data.columns))
-        st.sidebar.write("FIRST 3 ROWS:")
-        st.sidebar.dataframe(global_data.head(3))
+        # DEBUG: Show what we got
+        st.sidebar.header("🔍 GLOBAL DATA DEBUG")
+        st.sidebar.write("Raw shape:", global_data.shape)
+        st.sidebar.write("Raw columns:", list(global_data.columns))
+        st.sidebar.write("First row:", global_data.iloc[0].tolist() if len(global_data) > 0 else "No data")
         
-        # Enhanced column mapping with more variations
+        # Check if we have a single column with all data (CSV formatting issue)
+        if len(global_data.columns) == 1:
+            st.warning("⚠️ CSV formatting issue detected - single column found")
+            # Try to split the single column
+            first_col = global_data.columns[0]
+            # Split by comma to get proper columns
+            split_data = global_data[first_col].str.split(',', expand=True)
+            # Use first row as column names
+            new_columns = split_data.iloc[0].tolist()
+            global_data = split_data.iloc[1:].copy()
+            global_data.columns = new_columns
+            st.info(f"🔧 Fixed CSV format. New columns: {list(global_data.columns)}")
+        
+        # Convert numeric columns
+        for col in global_data.columns:
+            try:
+                global_data[col] = pd.to_numeric(global_data[col])
+            except:
+                pass  # Keep as string if not numeric
+        
+        # Auto-detect and map column names
         column_mapping = {}
         
-        # Detect year column - expanded list
-        year_candidates = ['Year', 'year', 'YEAR', 'Time', 'time', 'DATE', 'date', 
-                          'yr', 'Yr', 'annual', 'Annual', 'decade', 'Decade']
-        for candidate in year_candidates:
-            if candidate in global_data.columns:
-                column_mapping[candidate] = 'year'
-                st.sidebar.info(f"Found year column: {candidate} -> year")
-                break
+        # Detect year column
+        year_candidates = ['year', 'Year', 'YEAR', 'time', 'Time', 'date', 'Date', 'yr', 'Yr']
+        for candidate in global_data.columns:
+            for pattern in year_candidates:
+                if pattern.lower() in candidate.lower():
+                    column_mapping[candidate] = 'year'
+                    break
         
-        # Detect temperature column - expanded list
-        temp_candidates = ['LandAverageTemperature', 'Temperature', 'temperature', 'temp', 'TEMP',
-                          'Land Average Temperature', 'Global Temperature', 'global_temperature',
-                          'temp_global', 'global_temp', 'mean_temp', 'Mean_Temp', 'anomaly', 'Anomaly']
-        for candidate in temp_candidates:
-            if candidate in global_data.columns:
-                column_mapping[candidate] = 'LandAverageTemperature'
-                st.sidebar.info(f"Found temperature column: {candidate} -> LandAverageTemperature")
-                break
+        # Detect temperature column
+        temp_candidates = ['temp', 'Temp', 'temperature', 'Temperature', 'global', 'Global']
+        for candidate in global_data.columns:
+            for pattern in temp_candidates:
+                if pattern.lower() in candidate.lower():
+                    column_mapping[candidate] = 'LandAverageTemperature'
+                    break
         
-        # Detect CO2 column - expanded list
-        co2_candidates = ['Seasonally Adjusted CO2 (ppm)', 'CO2', 'co2', 'carbon_dioxide',
-                         'Carbon Dioxide', 'CO2_ppm', 'co2_ppm', 'CO2 (ppm)', 'co2_ppm',
-                         'carbon', 'Carbon', 'co2_concentration', 'CO2_concentration']
-        for candidate in co2_candidates:
-            if candidate in global_data.columns:
-                column_mapping[candidate] = 'Seasonally Adjusted CO2 (ppm)'
-                st.sidebar.info(f"Found CO2 column: {candidate} -> Seasonally Adjusted CO2 (ppm)")
-                break
+        # Detect CO2 column
+        co2_candidates = ['co2', 'CO2', 'carbon', 'Carbon', 'ppm', 'concentration']
+        for candidate in global_data.columns:
+            for pattern in co2_candidates:
+                if pattern.lower() in candidate.lower():
+                    column_mapping[candidate] = 'Seasonally Adjusted CO2 (ppm)'
+                    break
         
-        # Apply renaming if we found matches
+        # Apply renaming
         if column_mapping:
             global_data = global_data.rename(columns=column_mapping)
-            st.success(f"🔧 Auto-renamed columns: {column_mapping}")
-        else:
-            st.sidebar.error("❌ No column matches found!")
-            st.sidebar.write("Available columns:", list(global_data.columns))
+            st.success(f"🔧 Renamed global columns: {column_mapping}")
         
-        # Check if we have the required columns after renaming
+        # Check required columns
         required_columns = ['year', 'LandAverageTemperature', 'Seasonally Adjusted CO2 (ppm)']
         missing_columns = [col for col in required_columns if col not in global_data.columns]
         
         if missing_columns:
-            st.error(f"❌ Missing required columns: {missing_columns}")
-            st.warning("Using sample data for global analysis")
-            
-            # Create fallback data
+            st.error(f"❌ Missing global columns: {missing_columns}")
+            st.warning("Using sample global data")
             years = list(range(1971, 2016))
             global_data = pd.DataFrame({
                 'year': years,
@@ -232,77 +217,94 @@ def load_data():
         
         data['global'] = global_data
         
-    except FileNotFoundError:
-        st.warning("📝 Using sample global data")
+    except Exception as e:
+        st.error(f"Error loading global data: {e}")
+        st.warning("Using sample global data")
         years = list(range(1971, 2016))
-        temps = [8.5 + 0.03 * (year-1971) + np.random.normal(0, 0.15) for year in years]
-        co2 = [320 + 1.7 * (year-1971) for year in years]
         data['global'] = pd.DataFrame({
             'year': years,
-            'LandAverageTemperature': temps,
-            'Seasonally Adjusted CO2 (ppm)': co2
+            'LandAverageTemperature': [8.5 + 0.03 * (year-1971) for year in years],
+            'Seasonally Adjusted CO2 (ppm)': [320 + 1.7 * (year-1971) for year in years]
         })
     
-    # Level 2: Country data - ENHANCED WITH COLUMN VALIDATION
+    # Level 2: Country data - FIXED CSV PARSING
     try:
-        country_data = pd.read_csv('country_warming_rates.csv')
+        # Try different CSV parsing options
+        try:
+            country_data = pd.read_csv('country_warming_rates.csv')
+        except:
+            country_data = pd.read_csv('country_warming_rates.csv', encoding='latin-1')
         
-        # DEBUG: Show country data structure
-        st.sidebar.header("🔍 COUNTRY DATA - RAW COLUMNS")
-        st.sidebar.write("ACTUAL COLUMNS:", list(country_data.columns))
-        st.sidebar.write("FIRST 3 ROWS:")
-        st.sidebar.dataframe(country_data.head(3))
+        st.sidebar.header("🔍 COUNTRY DATA DEBUG")
+        st.sidebar.write("Raw shape:", country_data.shape)
+        st.sidebar.write("Raw columns:", list(country_data.columns))
+        st.sidebar.write("First row:", country_data.iloc[0].tolist() if len(country_data) > 0 else "No data")
         
-        # Auto-detect and map country column names
-        country_column_mapping = {}
-        
-        # Detect country name column
-        country_candidates = ['country', 'Country', 'COUNTRY', 'nation', 'Nation', 
-                             'country_name', 'Country_Name', 'location', 'Location']
-        for candidate in country_candidates:
-            if candidate in country_data.columns:
-                country_column_mapping[candidate] = 'country'
-                st.sidebar.info(f"Found country column: {candidate} -> country")
-                break
-        
-        # Detect warming rate column
-        warming_candidates = ['warming_rate_c_per_decade', 'warming_rate', 'Warming Rate',
-                             'warming', 'Warming', 'rate', 'Rate', 'trend', 'Trend',
-                             'slope', 'Slope', 'change_rate', 'Change_Rate']
-        for candidate in warming_candidates:
-            if candidate in country_data.columns:
-                country_column_mapping[candidate] = 'warming_rate_c_per_decade'
-                st.sidebar.info(f"Found warming rate column: {candidate} -> warming_rate_c_per_decade")
-                break
-        
-        # Apply renaming
-        if country_column_mapping:
-            country_data = country_data.rename(columns=country_column_mapping)
-            st.info(f"🔧 Auto-renamed country columns: {country_column_mapping}")
-        
-        # Ensure required columns exist
-        if 'country' not in country_data.columns:
-            # If no country column found, use the first column as country names
+        # FIX CSV FORMATTING ISSUE
+        if len(country_data.columns) == 1:
+            st.warning("⚠️ Country CSV formatting issue detected")
             first_col = country_data.columns[0]
-            country_data = country_data.rename(columns={first_col: 'country'})
-            st.warning(f"🔧 Using first column '{first_col}' as country names")
+            
+            # Check if this is the header row issue we saw
+            if 'country,warming_rate' in first_col:
+                st.info("🔧 Fixing malformed CSV header")
+                # Split the single column into multiple columns
+                split_data = country_data[first_col].str.split(',', expand=True)
+                
+                # The first row should be the actual column names
+                if len(split_data) > 0:
+                    # Use first row as column names
+                    new_columns = split_data.iloc[0].tolist()
+                    country_data = split_data.iloc[1:].copy()
+                    country_data.columns = new_columns
+                    st.success(f"🔧 Fixed country CSV. New columns: {list(country_data.columns)}")
+        
+        # Convert numeric columns
+        for col in country_data.columns:
+            if col != 'country':  # Don't convert country names to numeric
+                try:
+                    country_data[col] = pd.to_numeric(country_data[col])
+                except:
+                    pass
+        
+        # Ensure we have required columns
+        if 'country' not in country_data.columns:
+            # Try to find a column that contains country names
+            for col in country_data.columns:
+                if any(keyword in col.lower() for keyword in ['country', 'nation', 'location', 'name']):
+                    country_data = country_data.rename(columns={col: 'country'})
+                    st.info(f"🔧 Renamed '{col}' to 'country'")
+                    break
+            else:
+                # If no country column found, use first column
+                first_col = country_data.columns[0]
+                country_data = country_data.rename(columns={first_col: 'country'})
+                st.warning(f"🔧 Using first column '{first_col}' as country")
         
         if 'warming_rate_c_per_decade' not in country_data.columns:
-            # Try to find numeric columns that could be warming rates
-            numeric_cols = country_data.select_dtypes(include=[np.number]).columns
-            if len(numeric_cols) > 0:
-                country_data = country_data.rename(columns={numeric_cols[0]: 'warming_rate_c_per_decade'})
-                st.warning(f"🔧 Using numeric column '{numeric_cols[0]}' as warming rate")
+            # Try to find warming rate column
+            for col in country_data.columns:
+                if any(keyword in col.lower() for keyword in ['warming', 'rate', 'trend', 'slope', 'change']):
+                    country_data = country_data.rename(columns={col: 'warming_rate_c_per_decade'})
+                    st.info(f"🔧 Renamed '{col}' to 'warming_rate_c_per_decade'")
+                    break
             else:
-                # Add default warming rate
-                country_data['warming_rate_c_per_decade'] = 0.3
-                st.warning("🔧 Added default warming rate column")
+                # Use first numeric column as warming rate
+                numeric_cols = country_data.select_dtypes(include=[np.number]).columns
+                if len(numeric_cols) > 0:
+                    country_data = country_data.rename(columns={numeric_cols[0]: 'warming_rate_c_per_decade'})
+                    st.warning(f"🔧 Using numeric column '{numeric_cols[0]}' as warming rate")
+                else:
+                    # Add default warming rate
+                    country_data['warming_rate_c_per_decade'] = 0.3
+                    st.warning("🔧 Added default warming rate column")
         
         st.success("✅ Loaded country-level data")
         data['country'] = country_data
         
-    except FileNotFoundError:
-        st.warning("📝 Using sample country data")
+    except Exception as e:
+        st.error(f"Error loading country data: {e}")
+        st.warning("Using sample country data")
         countries = ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Russia', 'Iran', 'Canada']
         warming_rates = [0.331, 0.328, 0.318, 0.317, 0.307, 0.303]
         data['country'] = pd.DataFrame({
@@ -315,9 +317,9 @@ def load_data():
         urban_data = pd.read_csv('city_warming_rates.csv')
         st.success("✅ Loaded urban-level data")
         data['urban'] = urban_data
-        
-    except FileNotFoundError:
-        st.warning("📝 Using sample urban data")
+    except Exception as e:
+        st.error(f"Error loading urban data: {e}")
+        st.warning("Using sample urban data")
         cities = ['Mashhad', 'Harbin', 'Changchun', 'Moscow', 'Shenyang', 'Kiev']
         countries = ['Iran', 'China', 'China', 'Russia', 'China', 'Ukraine']
         urban_rates = [0.164, 0.160, 0.155, 0.151, 0.143, 0.135]
