@@ -268,9 +268,31 @@ def load_data():
     
     # Level 3: Urban data
     try:
-        urban_data = pd.read_csv('city_warming_rates.csv')
-        st.success("✅ Loaded urban-level data")
-        data['urban'] = urban_data
+    urban_data = pd.read_csv('city_warming_rates.csv')
+    
+    # FIX: Handle the case where all data is in one column
+    if len(urban_data.columns) == 1 and urban_data.iloc[0, 0].startswith('city,country'):
+        st.info("🔄 Fixing urban data format...")
+        first_col = urban_data.columns[0]
+        split_data = urban_data[first_col].str.split(',', expand=True)
+        
+        if split_data.shape[0] > 0:
+            new_columns = split_data.iloc[0].str.strip()
+            split_data = split_data[1:]
+            split_data.columns = new_columns
+            
+            # Convert numeric columns
+            numeric_columns = ['warming_rate_c_per_decade', 'r_squared', 'data_points', 'total_months', 
+                             'start_year', 'end_year', 'mean_temperature']
+            for col in numeric_columns:
+                if col in split_data.columns:
+                    split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
+            
+            urban_data = split_data.reset_index(drop=True)
+            st.success("✅ Fixed urban data format")
+    
+    st.success("✅ Loaded urban-level data")
+    data['urban'] = urban_data
     except Exception as e:
         st.error(f"Error loading urban data: {e}")
         st.warning("Using sample urban data")
@@ -1005,63 +1027,66 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
             st.dataframe(country_data.head(3))
 
 def show_urban_analysis(urban_data):
-    """Level 3: Urban-Level Analysis - FIXED VERSION"""
+    """Level 3: Urban-Level Analysis - FIXED FOR MALFORMED CSV"""
     st.header("🏙️ Urban Climate Analysis")
     
     try:
+        # FIX: Handle the case where data is in a single string column
+        if len(urban_data.columns) == 1 and urban_data.iloc[0, 0].startswith('city,country'):
+            st.info("🔄 Fixing urban data format...")
+            
+            # Split the single column into proper columns
+            first_col = urban_data.columns[0]
+            split_data = urban_data[first_col].str.split(',', expand=True)
+            
+            # The first row contains headers, so use it as column names
+            if split_data.shape[0] > 0:
+                # Set the first row as column names
+                new_columns = split_data.iloc[0].str.strip()
+                split_data = split_data[1:]  # Remove the header row from data
+                split_data.columns = new_columns
+                
+                # Convert numeric columns
+                numeric_columns = ['warming_rate_c_per_decade', 'r_squared', 'data_points', 'total_months', 
+                                 'start_year', 'end_year', 'mean_temperature']
+                
+                for col in numeric_columns:
+                    if col in split_data.columns:
+                        split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
+                
+                urban_data = split_data.reset_index(drop=True)
+                st.success("✅ Successfully fixed urban data format")
+        
         # Display raw data structure for debugging
-        with st.expander("🔍 Raw Urban Data Structure"):
+        with st.expander("🔍 Urban Data Structure"):
             st.write("Columns:", list(urban_data.columns))
+            st.write("Data types:", urban_data.dtypes)
             st.write("Sample data:")
-            st.dataframe(urban_data.head(10))  # Show more rows for better debugging
+            st.dataframe(urban_data.head(10))
             st.write(f"Total cities: {len(urban_data)}")
             
-            # Check for warming rate column with different possible names
-            warming_cols = [col for col in urban_data.columns if 'warming' in col.lower() or 'rate' in col.lower()]
-            st.write(f"Possible warming rate columns: {warming_cols}")
+            if 'warming_rate_c_per_decade' in urban_data.columns:
+                st.write(f"Warming range: {urban_data['warming_rate_c_per_decade'].min():.3f} to {urban_data['warming_rate_c_per_decade'].max():.3f}°C/decade")
+        
+        # Ensure we have the required columns
+        required_columns = ['city', 'warming_rate_c_per_decade']
+        missing_columns = [col for col in required_columns if col not in urban_data.columns]
+        
+        if missing_columns:
+            st.error(f"❌ Missing required columns: {missing_columns}")
+            st.warning("Some visualizations may not work properly")
             
-            if warming_cols:
-                warming_col = warming_cols[0]
-                st.write(f"Using '{warming_col}' for warming rates")
-                st.write(f"Warming range: {urban_data[warming_col].min():.3f} to {urban_data[warming_col].max():.3f}°C/decade")
-        
-        # FIX: Handle different column names for warming rate
-        warming_col = None
-        possible_warming_cols = ['warming_rate_c_per_decade', 'warming_rate', 'rate', 'warming']
-        for col in possible_warming_cols:
-            if col in urban_data.columns:
-                warming_col = col
-                break
-        if not warming_col:
-            # Try to find any numeric column that could be warming rate
+            # Show what columns we do have
+            st.info("Available columns:")
             for col in urban_data.columns:
-                if urban_data[col].dtype in ['float64', 'int64'] and col != 'year':
-                    warming_col = col
-                    st.info(f"🔧 Using '{col}' as warming rate column")
-                    break
+                st.write(f"- {col}: {urban_data[col].dtype}")
         
-        # FIX: Handle city column name
-        city_col = None
-        possible_city_cols = ['city', 'City', 'urban_area', 'name']
-        for col in possible_city_cols:
-            if col in urban_data.columns:
-                city_col = col
-                break
-        if not city_col and len(urban_data.columns) > 0:
-            city_col = urban_data.columns[0]  # Use first column as city name
-            st.info(f"🔧 Using first column '{city_col}' as city name")
-        
-        # FIX: Handle country column
-        country_col = None
-        possible_country_cols = ['country', 'Country', 'nation', 'region']
-        for col in possible_country_cols:
-            if col in urban_data.columns:
-                country_col = col
-                break
-        
-        # Urban warming intensity distribution - WITH FALLBACK
+        # Urban warming intensity distribution
         if 'warming_intensity' in urban_data.columns:
             st.subheader("🏙️ Urban Warming Intensity Distribution")
+            
+            # Clean the intensity data
+            urban_data['warming_intensity'] = urban_data['warming_intensity'].str.strip()
             intensity_counts = urban_data['warming_intensity'].value_counts()
             
             col1, col2 = st.columns([2, 1])
@@ -1090,30 +1115,36 @@ def show_urban_analysis(urban_data):
                 st.metric("Total Cities Analyzed", total_cities)
                 st.metric("Extreme Warming Cities", extreme_cities)
                 
-                if warming_col:
-                    max_warming = urban_data[warming_col].max()
-                    st.metric("Fastest Warming City", f"{max_warming:.3f}°C/decade")
+                if 'warming_rate_c_per_decade' in urban_data.columns:
+                    max_warming = urban_data['warming_rate_c_per_decade'].max()
+                    fastest_city = urban_data.loc[urban_data['warming_rate_c_per_decade'].idxmax(), 'city']
+                    st.metric(
+                        "Fastest Warming City", 
+                        f"{max_warming:.3f}°C/decade",
+                        f"{fastest_city}"
+                    )
         else:
-            st.info("📝 No warming intensity categories found in data")
-            
-            # Create intensity categories based on warming rates if available
-            if warming_col:
+            # Create intensity categories based on warming rates
+            if 'warming_rate_c_per_decade' in urban_data.columns:
                 st.subheader("🏙️ Urban Warming Intensity (Calculated)")
                 
-                # Create intensity categories based on warming rates
                 def categorize_warming(rate):
-                    if rate < 0.1:
-                        return 'Very Slow'
-                    elif rate < 0.2:
-                        return 'Slow'
-                    elif rate < 0.3:
-                        return 'Moderate'
-                    elif rate < 0.4:
-                        return 'Fast'
-                    else:
-                        return 'Extreme'
+                    try:
+                        rate = float(rate)
+                        if rate < 0.1:
+                            return 'Very Slow'
+                        elif rate < 0.2:
+                            return 'Slow'
+                        elif rate < 0.3:
+                            return 'Moderate'
+                        elif rate < 0.4:
+                            return 'Fast'
+                        else:
+                            return 'Extreme'
+                    except (ValueError, TypeError):
+                        return 'Unknown'
                 
-                urban_data['warming_intensity'] = urban_data[warming_col].apply(categorize_warming)
+                urban_data['warming_intensity'] = urban_data['warming_rate_c_per_decade'].apply(categorize_warming)
                 intensity_counts = urban_data['warming_intensity'].value_counts()
                 
                 col1, col2 = st.columns([2, 1])
@@ -1128,7 +1159,8 @@ def show_urban_analysis(urban_data):
                             'Slow': '#f39c12',
                             'Moderate': '#e67e22',
                             'Fast': '#e74c3c',
-                            'Extreme': '#8b0000'
+                            'Extreme': '#8b0000',
+                            'Unknown': '#95a5a6'
                         },
                         title='Urban Warming Intensity Distribution (Calculated)',
                         labels={'x': 'Warming Intensity', 'y': 'Number of Cities'}
@@ -1139,169 +1171,186 @@ def show_urban_analysis(urban_data):
                     st.subheader("📈 Urban Warming Stats")
                     total_cities = len(urban_data)
                     extreme_cities = len(urban_data[urban_data['warming_intensity'] == 'Extreme'])
-                    avg_warming = urban_data[warming_col].mean()
+                    avg_warming = urban_data['warming_rate_c_per_decade'].mean()
                     
                     st.metric("Total Cities Analyzed", total_cities)
                     st.metric("Extreme Warming Cities", extreme_cities)
                     st.metric("Average Warming Rate", f"{avg_warming:.3f}°C/decade")
         
-        # Top urban hotspots - WITH FALLBACK
-        if warming_col and city_col:
+        # Top urban hotspots
+        if 'warming_rate_c_per_decade' in urban_data.columns and 'city' in urban_data.columns:
             st.subheader("🔥 Urban Warming Hotspots")
             
-            # Get top 10 fastest warming cities
-            top_urban = urban_data.nlargest(10, warming_col)
-            
-            # Create the bar chart
-            fig = px.bar(
-                top_urban,
-                x=warming_col,
-                y=city_col,
-                orientation='h',
-                color=warming_col,
-                color_continuous_scale='Reds',
-                title='Top 10 Fastest-Warming Cities',
-                hover_data=[country_col] if country_col else None,
-                labels={warming_col: 'Warming Rate (°C/decade)', city_col: 'City'}
+            # Clean city names and ensure numeric warming rates
+            urban_data_clean = urban_data.copy()
+            urban_data_clean['city'] = urban_data_clean['city'].str.strip()
+            urban_data_clean['warming_rate_c_per_decade'] = pd.to_numeric(
+                urban_data_clean['warming_rate_c_per_decade'], errors='coerce'
             )
             
-            # Improve layout
-            fig.update_layout(
-                height=500,
-                showlegend=False
-            )
+            # Remove any rows with missing warming rates
+            urban_data_clean = urban_data_clean.dropna(subset=['warming_rate_c_per_decade'])
             
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Show data table for the top cities
-            with st.expander("📋 View Top Warming Cities Data"):
-                display_cols = [city_col, warming_col]
-                if country_col:
-                    display_cols.append(country_col)
-                if 'warming_intensity' in urban_data.columns:
-                    display_cols.append('warming_intensity')
+            if len(urban_data_clean) > 0:
+                top_urban = urban_data_clean.nlargest(10, 'warming_rate_c_per_decade')
                 
-                st.dataframe(top_urban[display_cols].reset_index(drop=True))
-        else:
-            st.warning("❌ Cannot display urban hotspots - missing city or warming rate data")
-            
-            # Show what data we do have
-            if city_col:
-                st.info(f"Available cities: {list(urban_data[city_col].head(10))}")
-            if warming_col:
-                st.info(f"Warming rates available: {urban_data[warming_col].describe()}")
+                fig = px.bar(
+                    top_urban,
+                    x='warming_rate_c_per_decade',
+                    y='city',
+                    orientation='h',
+                    color='warming_rate_c_per_decade',
+                    color_continuous_scale='Reds',
+                    title='Top 10 Fastest-Warming Cities',
+                    hover_data=['country'] if 'country' in urban_data_clean.columns else None,
+                    labels={
+                        'warming_rate_c_per_decade': 'Warming Rate (°C/decade)',
+                        'city': 'City'
+                    }
+                )
+                
+                # Improve layout
+                fig.update_layout(
+                    height=500,
+                    showlegend=False,
+                    yaxis={'categoryorder': 'total ascending'}
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Show data table
+                with st.expander("📋 View Top Warming Cities Data"):
+                    display_cols = ['city', 'warming_rate_c_per_decade']
+                    if 'country' in urban_data_clean.columns:
+                        display_cols.append('country')
+                    if 'warming_intensity' in urban_data_clean.columns:
+                        display_cols.append('warming_intensity')
+                    
+                    st.dataframe(
+                        top_urban[display_cols].round(4).reset_index(drop=True),
+                        use_container_width=True
+                    )
+            else:
+                st.warning("No valid warming rate data available for visualization")
         
-        # Urban statistics section
-        st.subheader("📊 Urban Climate Statistics")
+        # Urban statistics
+        if 'warming_rate_c_per_decade' in urban_data.columns:
+            st.subheader("📊 Urban Climate Statistics")
+            
+            # Ensure numeric data
+            urban_data['warming_rate_c_per_decade'] = pd.to_numeric(
+                urban_data['warming_rate_c_per_decade'], errors='coerce'
+            )
+            urban_data_clean = urban_data.dropna(subset=['warming_rate_c_per_decade'])
+            
+            if len(urban_data_clean) > 0:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    avg_warming = urban_data_clean['warming_rate_c_per_decade'].mean()
+                    st.metric("Average Urban Warming", f"{avg_warming:.3f}°C/decade")
+                
+                with col2:
+                    max_warming = urban_data_clean['warming_rate_c_per_decade'].max()
+                    st.metric("Maximum Urban Warming", f"{max_warming:.3f}°C/decade")
+                
+                with col3:
+                    min_warming = urban_data_clean['warming_rate_c_per_decade'].min()
+                    st.metric("Minimum Urban Warming", f"{min_warming:.3f}°C/decade")
+                
+                with col4:
+                    std_warming = urban_data_clean['warming_rate_c_per_decade'].std()
+                    st.metric("Variability (Std Dev)", f"{std_warming:.3f}°C/decade")
         
-        if warming_col:
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                avg_warming = urban_data[warming_col].mean()
-                st.metric("Average Urban Warming", f"{avg_warming:.3f}°C/decade")
-            
-            with col2:
-                max_warming = urban_data[warming_col].max()
-                st.metric("Maximum Urban Warming", f"{max_warming:.3f}°C/decade")
-            
-            with col3:
-                min_warming = urban_data[warming_col].min()
-                st.metric("Minimum Urban Warming", f"{min_warming:.3f}°C/decade")
-            
-            with col4:
-                std_warming = urban_data[warming_col].std()
-                st.metric("Variability (Std Dev)", f"{std_warming:.3f}°C/decade")
-        
-        # Geographic patterns - ENHANCED VERSION
+        # Geographic patterns
         st.subheader("🌍 Urban Geographic Patterns")
         
-        # Try to detect geographic patterns from the data
-        if city_col and country_col and warming_col:
-            # Show warming by country
-            country_stats = urban_data.groupby(country_col)[warming_col].agg(['mean', 'count']).round(4)
-            country_stats = country_stats.sort_values('mean', ascending=False)
+        if 'country' in urban_data.columns and 'warming_rate_c_per_decade' in urban_data.columns:
+            # Clean country names and ensure numeric data
+            urban_data_clean = urban_data.copy()
+            urban_data_clean['country'] = urban_data_clean['country'].str.strip()
+            urban_data_clean['warming_rate_c_per_decade'] = pd.to_numeric(
+                urban_data_clean['warming_rate_c_per_decade'], errors='coerce'
+            )
+            urban_data_clean = urban_data_clean.dropna(subset=['warming_rate_c_per_decade', 'country'])
             
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**Warming Rates by Country:**")
-                st.dataframe(
-                    country_stats.head(10),
-                    use_container_width=True
-                )
-            
-            with col2:
-                # Show fastest warming cities by region
-                st.write("**Regional Hotspots:**")
+            if len(urban_data_clean) > 0:
+                country_stats = urban_data_clean.groupby('country')['warming_rate_c_per_decade'].agg(['mean', 'count']).round(4)
+                country_stats = country_stats.sort_values('mean', ascending=False)
                 
-                # Sample regional analysis based on common patterns
-                regions = {
-                    'East Asia': ['China', 'Japan', 'South Korea', 'Taiwan'],
-                    'Central Asia': ['Kazakhstan', 'Uzbekistan', 'Turkmenistan', 'Kyrgyzstan'],
-                    'Middle East': ['Iran', 'Iraq', 'Saudi Arabia', 'Turkey'],
-                    'Eastern Europe': ['Russia', 'Ukraine', 'Belarus', 'Poland'],
-                    'North America': ['United States', 'Canada', 'Mexico']
-                }
+                col1, col2 = st.columns(2)
                 
-                for region, countries in regions.items():
-                    region_cities = urban_data[urban_data[country_col].isin(countries)]
-                    if len(region_cities) > 0:
-                        region_avg = region_cities[warming_col].mean()
-                        st.write(f"**{region}:** {region_avg:.3f}°C/decade ({len(region_cities)} cities)")
+                with col1:
+                    st.write("**Top Countries by Urban Warming:**")
+                    st.dataframe(
+                        country_stats.head(10),
+                        use_container_width=True
+                    )
+                
+                with col2:
+                    st.write("**Regional Analysis:**")
+                    
+                    # Count cities by country
+                    top_countries = country_stats.nlargest(5, 'mean')
+                    for country, row in top_countries.iterrows():
+                        st.write(f"**{country}:** {row['mean']:.3f}°C/decade ({int(row['count'])} cities)")
+            else:
+                # Fallback to static patterns
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.write("**Northeast China Cluster:**")
+                    st.write("Harbin, Changchun, Shenyang")
+                    st.write("Rapid industrial warming")
+                
+                with col2:
+                    st.write("**Middle East Hotspots:**")
+                    st.write("Mashhad, Baghdad, Tehran")
+                    st.write("Arid climate amplification")
+                
+                with col3:
+                    st.write("**Northern Cities:**")
+                    st.write("Moscow, Montreal, Toronto")
+                    st.write("Cold climate sensitivity")
         else:
-            # Fallback to static patterns if we can't detect from data
+            # Fallback to static patterns
             col1, col2, col3 = st.columns(3)
             
             with col1:
                 st.write("**Northeast China Cluster:**")
                 st.write("Harbin, Changchun, Shenyang")
                 st.write("Rapid industrial warming")
-                if warming_col and city_col:
-                    china_cities = urban_data[urban_data[city_col].str.contains('Harbin|Changchun|Shenyang', case=False, na=False)]
-                    if len(china_cities) > 0:
-                        avg_rate = china_cities[warming_col].mean()
-                        st.write(f"Average: {avg_rate:.3f}°C/decade")
             
             with col2:
                 st.write("**Middle East Hotspots:**")
                 st.write("Mashhad, Baghdad, Tehran")
                 st.write("Arid climate amplification")
-                if warming_col and city_col:
-                    me_cities = urban_data[urban_data[city_col].str.contains('Mashhad|Baghdad|Tehran', case=False, na=False)]
-                    if len(me_cities) > 0:
-                        avg_rate = me_cities[warming_col].mean()
-                        st.write(f"Average: {avg_rate:.3f}°C/decade")
             
             with col3:
                 st.write("**Northern Cities:**")
                 st.write("Moscow, Montreal, Toronto")
                 st.write("Cold climate sensitivity")
-                if warming_col and city_col:
-                    north_cities = urban_data[urban_data[city_col].str.contains('Moscow|Montreal|Toronto', case=False, na=False)]
-                    if len(north_cities) > 0:
-                        avg_rate = north_cities[warming_col].mean()
-                        st.write(f"Average: {avg_rate:.3f}°C/decade")
         
-        # Additional urban insights
-        st.subheader("💡 Urban Climate Insights")
-        
-        if warming_col:
-            insights = []
+        # Data quality information
+        if any(col in urban_data.columns for col in ['r_squared', 'data_points', 'data_quality']):
+            st.subheader("📈 Data Quality Information")
             
-            avg_warming = urban_data[warming_col].mean()
-            max_warming = urban_data[warming_col].max()
+            quality_cols = st.columns(3)
             
-            insights.append(f"**Urban Amplification:** Cities warming at average rate of {avg_warming:.3f}°C/decade")
-            insights.append(f"**Extreme Cases:** Fastest-warming city at {max_warming:.3f}°C/decade")
+            if 'r_squared' in urban_data.columns:
+                with quality_cols[0]:
+                    avg_r2 = pd.to_numeric(urban_data['r_squared'], errors='coerce').mean()
+                    st.metric("Average R-squared", f"{avg_r2:.3f}")
             
-            if avg_warming > 0.2:
-                insights.append("**High Impact:** Urban areas experiencing rapid temperature increases")
-            else:
-                insights.append("**Moderate Impact:** Steady urban warming observed")
+            if 'data_points' in urban_data.columns:
+                with quality_cols[1]:
+                    total_points = pd.to_numeric(urban_data['data_points'], errors='coerce').sum()
+                    st.metric("Total Data Points", f"{int(total_points):,}")
             
-            for insight in insights:
-                st.write(f"• {insight}")
+            if 'data_quality' in urban_data.columns:
+                with quality_cols[2]:
+                    quality_counts = urban_data['data_quality'].value_counts()
+                    st.metric("Most Common Quality", quality_counts.index[0] if len(quality_counts) > 0 else "N/A")
                 
     except Exception as e:
         st.error(f"Error in urban analysis: {e}")
@@ -1312,8 +1361,12 @@ def show_urban_analysis(urban_data):
             st.write("Error message:", str(e))
             st.write("Urban data columns:", list(urban_data.columns))
             st.write("Urban data shape:", urban_data.shape)
-            st.write("First 5 rows:")
-            st.dataframe(urban_data.head())
+            st.write("First 3 rows:")
+            st.dataframe(urban_data.head(3))
+            
+            # Show raw data for debugging
+            st.write("Raw data sample:")
+            st.write(urban_data.iloc[0] if len(urban_data) > 0 else "No data")
 
 def show_cross_scale_comparison(global_data, country_data, urban_data):
     """Cross-scale comparisons - FIXED VERSION"""
