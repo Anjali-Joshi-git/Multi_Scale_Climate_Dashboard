@@ -268,7 +268,7 @@ def load_data():
     
     # Level 3: Urban data
     try:
-    urban_data = pd.read_csv('city_warming_rates.csv')
+        urban_data = pd.read_csv('city_warming_rates.csv')
     
     # FIX: Handle the case where all data is in one column
     if len(urban_data.columns) == 1 and urban_data.iloc[0, 0].startswith('city,country'):
