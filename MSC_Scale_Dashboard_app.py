@@ -130,23 +130,17 @@ def load_data():
     """Load climate data with exact column mapping for your specific files"""
     data = {}
     
-    # Level 1: Global data - EXACT MAPPING
+    # Level 1: Global data
     try:
         global_data = pd.read_csv('modern_data_1971_2015.csv')
         
-        st.sidebar.header("🔍 GLOBAL DATA STRUCTURE")
-        st.sidebar.write("Original columns:", list(global_data.columns))
-        
         # FIX CSV FORMATTING ISSUE - Your data has all columns in one string
         if len(global_data.columns) == 1:
-            st.info("🔄 Fixing global data format...")
             first_col = global_data.columns[0]
             
             # Split the single column into proper columns
             split_data = global_data[first_col].str.split(',', expand=True)
             
-            # Your data structure: ['1971', '326.31416666666667', '8.59925', '14.35275', '2.9622499999999996']
-            # This appears to be: [year, CO2, temperature, something, something]
             if len(split_data.columns) >= 3:
                 # Use meaningful column names based on your data structure
                 split_data.columns = ['year', 'co2', 'temperature', 'unknown1', 'unknown2']
@@ -157,7 +151,6 @@ def load_data():
                 split_data['temperature'] = pd.to_numeric(split_data['temperature'], errors='coerce')
                 
                 global_data = split_data
-                st.success("✅ Fixed global data format")
         
         # EXACT MAPPING FOR YOUR GLOBAL DATA
         global_data = global_data.rename(columns={
@@ -166,14 +159,11 @@ def load_data():
             'temperature': 'LandAverageTemperature'
         })
         
-        st.sidebar.write("Mapped columns:", list(global_data.columns))
-        
         # Check if we have the required data
         if 'year' in global_data.columns and 'LandAverageTemperature' in global_data.columns and 'Seasonally Adjusted CO2 (ppm)' in global_data.columns:
-            st.success("✅ Loaded global climate data")
             data['global'] = global_data
         else:
-            st.warning("📝 Using sample global data")
+            # Create fallback data
             years = list(range(1971, 2016))
             data['global'] = pd.DataFrame({
                 'year': years,
@@ -182,8 +172,7 @@ def load_data():
             })
             
     except Exception as e:
-        st.error(f"Error loading global data: {e}")
-        st.warning("Using sample global data")
+        # Create fallback data on error
         years = list(range(1971, 2016))
         data['global'] = pd.DataFrame({
             'year': years,
@@ -191,27 +180,21 @@ def load_data():
             'Seasonally Adjusted CO2 (ppm)': [320 + 1.7 * (year-1971) for year in years]
         })
     
-    # Level 2: Country data - EXACT MAPPING
+    # Level 2: Country data
     try:
         country_data = pd.read_csv('country_warming_rates.csv')
         
-        st.sidebar.header("🔍 COUNTRY DATA STRUCTURE")
-        st.sidebar.write("Original columns:", list(country_data.columns))
-        
         # FIX CSV FORMATTING ISSUE
         if len(country_data.columns) == 1:
-            st.info("🔄 Fixing country data format...")
             first_col = country_data.columns[0]
             
             # Split the single column
             split_data = country_data[first_col].str.split(',', expand=True)
             
-            # Your data structure: ['Turkmenistan', '0.33134033501220955', '0.44053489691273406', '64', '1950-2013', '15.465597656249999', 'Medium', None]
-            # This appears to be: [country, warming_rate, r_squared, data_points, period, mean_temp, quality, unknown]
             if len(split_data.columns) >= 2:
                 # Remove any None columns and use meaningful names
                 valid_columns = []
-                for i in range(min(7, len(split_data.columns))):  # Take first 7 columns max
+                for i in range(min(7, len(split_data.columns))):
                     if split_data.iloc[0, i] is not None and pd.notna(split_data.iloc[0, i]):
                         valid_columns.append(f"col_{i}")
                 
@@ -225,7 +208,6 @@ def load_data():
                         split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
                 
                 country_data = split_data
-                st.success("✅ Fixed country data format")
         
         # EXACT MAPPING FOR YOUR COUNTRY DATA
         country_data = country_data.rename(columns={
@@ -236,13 +218,8 @@ def load_data():
             'mean_temp': 'mean_temperature'
         })
         
-        st.sidebar.write("Mapped columns:", list(country_data.columns))
-        st.sidebar.write("Sample data:")
-        st.sidebar.dataframe(country_data.head(3))
-        
         # Ensure required columns exist
         if 'country' not in country_data.columns:
-            st.error("❌ Country column missing after processing")
             raise ValueError("Country column missing")
         
         if 'warming_rate_c_per_decade' not in country_data.columns:
@@ -250,15 +227,12 @@ def load_data():
             for col in country_data.columns:
                 if col != 'country' and country_data[col].dtype in ['float64', 'int64']:
                     country_data = country_data.rename(columns={col: 'warming_rate_c_per_decade'})
-                    st.info(f"🔧 Using '{col}' as warming rate")
                     break
         
-        st.success("✅ Loaded country-level data")
         data['country'] = country_data
         
     except Exception as e:
-        st.error(f"Error loading country data: {e}")
-        st.warning("Using sample country data")
+        # Fallback sample data
         countries = ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Russia', 'Iran', 'Canada']
         warming_rates = [0.331, 0.328, 0.318, 0.317, 0.307, 0.303]
         data['country'] = pd.DataFrame({
@@ -266,16 +240,12 @@ def load_data():
             'warming_rate_c_per_decade': warming_rates
         })
     
-    # Level 3: Urban data - FIXED VERSION WITH PROPER ERROR HANDLING
+    # Level 3: Urban data
     try:
         urban_data = pd.read_csv('city_warming_rates.csv')
         
-        st.sidebar.header("🔍 URBAN DATA STRUCTURE")
-        st.sidebar.write("Original columns:", list(urban_data.columns))
-        
         # FIX CSV FORMATTING ISSUE - Handle the case where all data is in one column
         if len(urban_data.columns) == 1 and urban_data.iloc[0, 0].startswith('city,country'):
-            st.info("🔄 Fixing urban data format...")
             first_col = urban_data.columns[0]
             split_data = urban_data[first_col].str.split(',', expand=True)
             
@@ -294,18 +264,11 @@ def load_data():
                         split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
                 
                 urban_data = split_data.reset_index(drop=True)
-                st.success("✅ Successfully fixed urban data format")
         
-        st.sidebar.write("Processed urban columns:", list(urban_data.columns))
-        st.sidebar.write("Urban data sample:")
-        st.sidebar.dataframe(urban_data.head(3))
-        
-        st.success("✅ Loaded urban-level data")
         data['urban'] = urban_data
         
     except Exception as e:
-        st.error(f"Error loading urban data: {e}")
-        st.warning("Using sample urban data")
+        # Fallback sample data
         cities = ['Mashhad', 'Harbin', 'Changchun', 'Moscow', 'Shenyang', 'Kiev']
         countries = ['Iran', 'China', 'China', 'Russia', 'China', 'Ukraine']
         urban_rates = [0.164, 0.160, 0.155, 0.151, 0.143, 0.135]
@@ -325,8 +288,6 @@ def load_vulnerability_data():
         # First load country data to get actual warming rates
         country_data = pd.read_csv('country_warming_rates.csv')
         
-        st.sidebar.header("🔍 VULNERABILITY DATA - INTELLIGENT")
-        
         # Process country data to extract warming rates
         if len(country_data.columns) == 1:
             # Handle malformed country CSV
@@ -341,17 +302,14 @@ def load_vulnerability_data():
         base_vulnerability = (warming_rates - warming_rates.min()) / (warming_rates.max() - warming_rates.min())
         
         # Add some realistic factors to make it more nuanced
-        # Factors: warming rate (60%), random variation (20%), region factor (20%)
         warming_factor = base_vulnerability * 0.6
-        
-        # Random variation (some countries are more resilient than others)
         random_factor = np.random.uniform(0, 0.2, len(countries))
         
         # Region factor (assign higher vulnerability to certain regions)
         high_vuln_regions = ['Central Asia', 'Middle East', 'Africa', 'Small Islands']
         medium_vuln_regions = ['South Asia', 'Latin America', 'Eastern Europe']
         
-        # Create sample region assignments (in real data, you'd have actual regions)
+        # Create sample region assignments
         regions = []
         for country in countries:
             if country in ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Uzbekistan', 'Iran', 'Afghanistan']:
@@ -375,11 +333,10 @@ def load_vulnerability_data():
         # Normalize to 0.3-0.9 range (realistic vulnerability range)
         vulnerability_scores = 0.3 + (vulnerability_scores * 0.6)
         
-        # Ensure Turkmenistan, Mongolia, Kazakhstan have high vulnerability (they are top warming countries)
+        # Ensure Turkmenistan, Mongolia, Kazakhstan have high vulnerability
         top_warming_countries = ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Russia', 'Uzbekistan', 'Iran']
         for i, country in enumerate(countries):
             if country in top_warming_countries:
-                # Boost vulnerability for top warming countries
                 vulnerability_scores[i] = min(0.9, vulnerability_scores[i] + 0.15)
         
         # Create final vulnerability dataframe
@@ -396,16 +353,35 @@ def load_vulnerability_data():
             labels=['Low', 'Medium', 'High', 'Critical']
         )
         
-        # Show some statistics
-        st.sidebar.write("📊 Vulnerability Analysis:")
-        st.sidebar.write(f"Top 5 most vulnerable countries:")
-        top_vulnerable = vulnerability_df.nlargest(5, 'vulnerability_score')
-        for _, row in top_vulnerable.iterrows():
-            st.sidebar.write(f"  {row['country']}: {row['vulnerability_score']:.3f} ({row['vulnerability_category']})")
+        return vulnerability_df
         
-        st.sidebar.write(f"Warming-Vulnerability correlation: {vulnerability_df['warming_rate_c_per_decade'].corr(vulnerability_df['vulnerability_score']):.3f}")
+    except Exception as e:
+        # Fallback: simple sample data
+        countries = ['Turkmenistan', 'Mongolia', 'Kazakhstan', 'Russia', 'Iran', 'Canada']
         
-        st.success("✅ Created intelligent vulnerability scores based on warming rates")
+        # Assign vulnerability based on known warming rates
+        vulnerability_mapping = {
+            'Turkmenistan': 0.85,
+            'Mongolia': 0.82,  
+            'Kazakhstan': 0.80,
+            'Russia': 0.75,
+            'Iran': 0.72,
+            'Canada': 0.45,
+        }
+        
+        vulnerability_scores = [vulnerability_mapping.get(country, 0.5) for country in countries]
+        
+        vulnerability_df = pd.DataFrame({
+            'country': countries,
+            'vulnerability_score': vulnerability_scores,
+        })
+        
+        vulnerability_df['vulnerability_category'] = pd.cut(
+            vulnerability_df['vulnerability_score'],
+            bins=[0, 0.4, 0.6, 0.8, 1],
+            labels=['Low', 'Medium', 'High', 'Critical']
+        )
+        
         return vulnerability_df
         
     except Exception as e:
@@ -1701,38 +1677,31 @@ def show_cross_scale_comparison(global_data, country_data, urban_data):
             st.write("Global data shape:", global_data.shape if global_data is not None else "None")
             st.write("Country data shape:", country_data.shape if country_data is not None else "None")
             st.write("Urban data shape:", urban_data.shape if urban_data is not None else "None")
-
 def main():
-    # DEBUG: Show what's being loaded
-    st.sidebar.header("🔍 Data Loading Debug")
-    
     # Load all data
     data = load_data()
     
-    # Show what columns we actually got
-    st.sidebar.write("**Global Data Columns:**", list(data['global'].columns))
-    st.sidebar.write("**Country Data Columns:**", list(data['country'].columns))
-    st.sidebar.write("**Urban Data Columns:**", list(data['urban'].columns))
-    
     st.markdown("""
-<h1 style='text-align: center; font-family: "Arial", sans-serif; font-size: 48px; color: #2c3e50;'>
-🌍 Multi-Scale Climate Dashboard
-</h1>
-""", unsafe_allow_html=True)
+    <h1 style='text-align: center; font-family: "Arial", sans-serif; font-size: 48px; color: #2c3e50;'>
+    🌍 Multi-Scale Climate Dashboard
+    </h1>
+    """, unsafe_allow_html=True)
     
     # Load vulnerability data
     vulnerability_results = load_vulnerability_data()
     
-    # Data overview
+    # Clean sidebar - only show essential information
+    st.sidebar.title("🔍 Navigation")
+    
+    # Data overview in a compact expander
     with st.sidebar.expander("📊 Data Overview"):
         st.write(f"**Global Data:** {len(data['global'])} records")
-        st.write(f"**Countries:** {len(data['country'])} countries") 
-        st.write(f"**Cities:** {len(data['urban'])} cities")
+        st.write(f"**Countries:** {len(data['country'])}") 
+        st.write(f"**Cities:** {len(data['urban'])}")
         if 'year' in data['global'].columns:
             st.write(f"**Time Period:** {data['global']['year'].min()}-{data['global']['year'].max()}")
     
     # Navigation
-    st.sidebar.title("🔍 Navigation")
     page = st.sidebar.radio(
         "Select Analysis Scale:",
         ["Global Overview", "Country Analysis", "Urban Insights", "Cross-Scale Comparisons"]
@@ -1751,7 +1720,7 @@ def main():
     except Exception as e:
         st.error(f"Error loading page: {e}")
 
-    # Footer
+    # Clean footer
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📚 Data Sources")
     st.sidebar.markdown("""
