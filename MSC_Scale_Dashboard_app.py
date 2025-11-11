@@ -131,20 +131,72 @@ def load_data():
     data = {}
     
     # Level 1: Global data
-    try:
-        global_data = pd.read_csv('modern_data_1971_2015.csv')
-        st.success("✅ Loaded global climate data")
-        data['global'] = global_data
-    except FileNotFoundError:
-        st.warning("📝 Using sample global data")
+# Level 1: Global data - ENHANCED WITH COLUMN DETECTION
+try:
+    global_data = pd.read_csv('modern_data_1971_2015.csv')
+    
+    # DEBUG: Show what columns we actually have
+    st.sidebar.write("🔍 Global Data Columns Found:", list(global_data.columns))
+    
+    # Auto-detect and map column names
+    column_mapping = {}
+    
+    # Detect year column
+    year_candidates = ['Year', 'year', 'YEAR', 'Time', 'time', 'DATE', 'date']
+    for candidate in year_candidates:
+        if candidate in global_data.columns:
+            column_mapping[candidate] = 'year'
+            break
+    
+    # Detect temperature column
+    temp_candidates = ['LandAverageTemperature', 'Temperature', 'temperature', 'temp', 'TEMP', 
+                      'Land Average Temperature', 'Global Temperature', 'global_temperature']
+    for candidate in temp_candidates:
+        if candidate in global_data.columns:
+            column_mapping[candidate] = 'LandAverageTemperature'
+            break
+    
+    # Detect CO2 column
+    co2_candidates = ['Seasonally Adjusted CO2 (ppm)', 'CO2', 'co2', 'carbon_dioxide', 
+                     'Carbon Dioxide', 'CO2_ppm', 'co2_ppm', 'CO2 (ppm)']
+    for candidate in co2_candidates:
+        if candidate in global_data.columns:
+            column_mapping[candidate] = 'Seasonally Adjusted CO2 (ppm)'
+            break
+    
+    # Apply renaming if we found matches
+    if column_mapping:
+        global_data = global_data.rename(columns=column_mapping)
+        st.info(f"🔧 Auto-renamed columns: {column_mapping}")
+    
+    # Check if we have the required columns after renaming
+    required_columns = ['year', 'LandAverageTemperature', 'Seasonally Adjusted CO2 (ppm)']
+    missing_columns = [col for col in required_columns if col not in global_data.columns]
+    
+    if missing_columns:
+        st.warning(f"📝 Missing columns after renaming: {missing_columns}. Using sample data.")
+        # Create fallback data
         years = list(range(1971, 2016))
-        temps = [8.5 + 0.03 * (year-1971) + np.random.normal(0, 0.15) for year in years]
-        co2 = [320 + 1.7 * (year-1971) for year in years]
-        data['global'] = pd.DataFrame({
+        global_data = pd.DataFrame({
             'year': years,
-            'LandAverageTemperature': temps,
-            'Seasonally Adjusted CO2 (ppm)': co2
+            'LandAverageTemperature': [8.5 + 0.03 * (year-1971) for year in years],
+            'Seasonally Adjusted CO2 (ppm)': [320 + 1.7 * (year-1971) for year in years]
         })
+    else:
+        st.success("✅ Loaded global climate data")
+    
+    data['global'] = global_data
+    
+except FileNotFoundError:
+    st.warning("📝 Using sample global data")
+    years = list(range(1971, 2016))
+    temps = [8.5 + 0.03 * (year-1971) + np.random.normal(0, 0.15) for year in years]
+    co2 = [320 + 1.7 * (year-1971) for year in years]
+    data['global'] = pd.DataFrame({
+        'year': years,
+        'LandAverageTemperature': temps,
+        'Seasonally Adjusted CO2 (ppm)': co2
+    })
     
     # Level 2: Country data
     try:
@@ -172,32 +224,44 @@ def load_data():
         })
     
     # Level 3: Urban data
-    try:
-        urban_data = pd.read_csv('city_warming_rates.csv')
-        st.success("✅ Loaded urban-level data")
-        
-        # Show raw data structure
-        with st.sidebar.expander("🔍 Raw Urban Data"):
-            st.write("Columns:", list(urban_data.columns))
-            st.write("Sample data:")
-            st.dataframe(urban_data.head(3))
-            st.write(f"Data range: {len(urban_data)} cities")
-            if 'warming_rate_c_per_decade' in urban_data.columns:
-                st.write(f"Warming range: {urban_data['warming_rate_c_per_decade'].min():.3f} to {urban_data['warming_rate_c_per_decade'].max():.3f}°C/decade")
-        
-        data['urban'] = urban_data
-        
-    except FileNotFoundError:
-        st.warning("📝 Using sample urban data")
-        cities = ['Mashhad', 'Harbin', 'Changchun', 'Moscow', 'Shenyang', 'Kiev']
-        countries = ['Iran', 'China', 'China', 'Russia', 'China', 'Ukraine']
-        urban_rates = [0.164, 0.160, 0.155, 0.151, 0.143, 0.135]
-        data['urban'] = pd.DataFrame({
-            'city': cities,
-            'country': countries,
-            'warming_rate_c_per_decade': urban_rates,
-            'warming_intensity': ['Extreme', 'Extreme', 'Extreme', 'Extreme', 'Extreme', 'Extreme']
-        })
+# Level 3: Urban data - SUPER ROBUST VERSION
+try:
+    st.sidebar.write("🔄 Attempting to load urban data...")
+    
+    # Check if file exists first
+    if not os.path.exists('city_warming_rates.csv'):
+        st.sidebar.error("❌ city_warming_rates.csv not found!")
+        st.sidebar.write("Available files:", [f for f in os.listdir('.') if 'city' in f.lower() or 'urban' in f.lower()])
+        raise FileNotFoundError("city_warming_rates.csv not found")
+    
+    # Try to load the file
+    urban_data = pd.read_csv('city_warming_rates.csv')
+    st.success("✅ Loaded urban-level data")
+    
+    # Show urban data info
+    st.sidebar.write(f"Urban data shape: {urban_data.shape}")
+    st.sidebar.write(f"Urban data columns: {list(urban_data.columns)}")
+    
+    data['urban'] = urban_data
+    
+except Exception as e:
+    st.error(f"❌ Critical error loading urban data: {e}")
+    st.warning("📝 Using sample urban data as fallback")
+    
+    # Create comprehensive sample data
+    cities = ['Mashhad', 'Harbin', 'Changchun', 'Moscow', 'Shenyang', 'Kiev',
+              'Baghdad', 'Montreal', 'Toronto', 'Ulaanbaatar']
+    countries = ['Iran', 'China', 'China', 'Russia', 'China', 'Ukraine',
+                 'Iraq', 'Canada', 'Canada', 'Mongolia']
+    urban_rates = [0.164, 0.160, 0.155, 0.151, 0.143, 0.135, 0.142, 0.138, 0.136, 0.162]
+    
+    data['urban'] = pd.DataFrame({
+        'city': cities,
+        'country': countries,
+        'warming_rate_c_per_decade': urban_rates,
+        'warming_intensity': ['Extreme', 'Extreme', 'Extreme', 'Extreme', 'Extreme', 
+                             'Extreme', 'Fast', 'Fast', 'Fast', 'Extreme']
+    })
     
     return data
 
@@ -847,25 +911,52 @@ def show_cross_scale_comparison(global_data, country_data, urban_data):
         st.error(f"Error in cross-scale comparison: {e}")
 
 def main():
-    # DEBUG: Show what's being loaded
-    st.sidebar.header("🔍 Data Loading Debug")
+        # ULTIMATE FILE DIAGNOSTICS
+    st.sidebar.header("🔍 STREAMLIT CLOUD FILE DEBUG")
+    import os
     
-    # Load all data
+    # Show current working directory
+    st.sidebar.write("**Current Directory:**", os.getcwd())
+    
+    # List ALL files in directory
+    all_files = os.listdir('.')
+    st.sidebar.write("**All Files:**", all_files)
+    
+    # Check specific data files
+    data_files = [
+        'city_warming_rates.csv',
+        'country_warming_rates.csv', 
+        'modern_data_1971_2015.csv',
+        'vulnerability_results.csv'
+    ]
+    
+    st.sidebar.write("**Data File Status:**")
+    for file in data_files:
+        exists = os.path.exists(file)
+        status = "✅ EXISTS" if exists else "❌ MISSING"
+        st.sidebar.write(f"{status} {file}")
+        
+        if exists:
+            # Show file size and modification time
+            try:
+                file_stats = os.stat(file)
+                st.sidebar.write(f"   Size: {file_stats.st_size} bytes")
+            except:
+                st.sidebar.write(f"   Size: Unknown")
+       
+    # Load all data - ONLY ONCE!
     data = load_data()
     
     # Show what columns we actually got
     st.sidebar.write("**Global Data Columns:**", list(data['global'].columns))
     st.sidebar.write("**Country Data Columns:**", list(data['country'].columns))
     st.sidebar.write("**Urban Data Columns:**", list(data['urban'].columns))
-    #st.title("🌍 Multi-Scale Climate Dashboard")
+    
     st.markdown("""
 <h1 style='text-align: center; font-family: "Arial", sans-serif; font-size: 48px; color: #2c3e50;'>
 🌍 Multi-Scale Climate Dashboard
 </h1>
 """, unsafe_allow_html=True)
-    
-    # Load all data
-    data = load_data()
     
     # Load vulnerability data
     vulnerability_results = load_vulnerability_data()
