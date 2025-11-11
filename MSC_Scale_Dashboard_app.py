@@ -1037,36 +1037,10 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
             st.dataframe(country_data.head(3))
 
 def show_urban_analysis(urban_data):
-    """Level 3: Urban-Level Analysis - FIXED FOR MALFORMED CSV"""
+    """Level 3: Urban-Level Analysis - FIXED VERSION"""
     st.header("🏙️ Urban Climate Analysis")
     
     try:
-        # FIX: Handle the case where data is in a single string column
-        if len(urban_data.columns) == 1 and urban_data.iloc[0, 0].startswith('city,country'):
-            st.info("🔄 Fixing urban data format...")
-            
-            # Split the single column into proper columns
-            first_col = urban_data.columns[0]
-            split_data = urban_data[first_col].str.split(',', expand=True)
-            
-            # The first row contains headers, so use it as column names
-            if split_data.shape[0] > 0:
-                # Set the first row as column names
-                new_columns = split_data.iloc[0].str.strip()
-                split_data = split_data[1:]  # Remove the header row from data
-                split_data.columns = new_columns
-                
-                # Convert numeric columns
-                numeric_columns = ['warming_rate_c_per_decade', 'r_squared', 'data_points', 'total_months', 
-                                 'start_year', 'end_year', 'mean_temperature']
-                
-                for col in numeric_columns:
-                    if col in split_data.columns:
-                        split_data[col] = pd.to_numeric(split_data[col], errors='coerce')
-                
-                urban_data = split_data.reset_index(drop=True)
-                st.success("✅ Successfully fixed urban data format")
-        
         # Display raw data structure for debugging
         with st.expander("🔍 Urban Data Structure"):
             st.write("Columns:", list(urban_data.columns))
@@ -1340,27 +1314,6 @@ def show_urban_analysis(urban_data):
                 st.write("**Northern Cities:**")
                 st.write("Moscow, Montreal, Toronto")
                 st.write("Cold climate sensitivity")
-        
-        # Data quality information
-        if any(col in urban_data.columns for col in ['r_squared', 'data_points', 'data_quality']):
-            st.subheader("📈 Data Quality Information")
-            
-            quality_cols = st.columns(3)
-            
-            if 'r_squared' in urban_data.columns:
-                with quality_cols[0]:
-                    avg_r2 = pd.to_numeric(urban_data['r_squared'], errors='coerce').mean()
-                    st.metric("Average R-squared", f"{avg_r2:.3f}")
-            
-            if 'data_points' in urban_data.columns:
-                with quality_cols[1]:
-                    total_points = pd.to_numeric(urban_data['data_points'], errors='coerce').sum()
-                    st.metric("Total Data Points", f"{int(total_points):,}")
-            
-            if 'data_quality' in urban_data.columns:
-                with quality_cols[2]:
-                    quality_counts = urban_data['data_quality'].value_counts()
-                    st.metric("Most Common Quality", quality_counts.index[0] if len(quality_counts) > 0 else "N/A")
                 
     except Exception as e:
         st.error(f"Error in urban analysis: {e}")
@@ -1373,10 +1326,6 @@ def show_urban_analysis(urban_data):
             st.write("Urban data shape:", urban_data.shape)
             st.write("First 3 rows:")
             st.dataframe(urban_data.head(3))
-            
-            # Show raw data for debugging
-            st.write("Raw data sample:")
-            st.write(urban_data.iloc[0] if len(urban_data) > 0 else "No data")
 
 def show_cross_scale_comparison(global_data, country_data, urban_data):
     """Cross-scale comparisons - FIXED VERSION"""
