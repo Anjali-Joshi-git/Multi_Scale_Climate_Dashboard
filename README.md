@@ -1,4 +1,6 @@
-## Get app here (multi-scale-climate-dashboard-app)
+<a href="https://multi-scale-climate-dashboard-app.streamlit.app" target="_blank">
+    🚀 Try the Live Dashboard Now
+</a>
 # 🎯 Project Overview
 The Multi-Scale Climate Dashboard is an advanced web application that provides comprehensive climate change analysis across three spatial resolutions. Built with Streamlit and powered by scientific machine learning models, this dashboard bridges the gap between complex climate data and actionable insights for researchers, policymakers, and the public.
 <div align="center">
