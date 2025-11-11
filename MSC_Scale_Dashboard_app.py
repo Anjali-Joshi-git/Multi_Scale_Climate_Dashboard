@@ -514,10 +514,33 @@ def show_global_analysis(global_data):
             st.write("Exception details:", str(e))
 
 def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
-    """Country analysis with vulnerability scoring"""
+    """Country analysis with vulnerability scoring - DEBUG VERSION"""
     st.header("🇺🇳 Country-Level Climate Analysis")
     
     try:
+        # COMPREHENSIVE DEBUGGING
+        st.sidebar.header("🔍 COUNTRY ANALYSIS DEBUG")
+        st.sidebar.write("Country data type:", type(country_data))
+        st.sidebar.write("Country data shape:", country_data.shape if hasattr(country_data, 'shape') else "No shape")
+        st.sidebar.write("Country data columns:", list(country_data.columns) if hasattr(country_data, 'columns') else "No columns")
+        
+        # Check if country_data is a DataFrame and has data
+        if not isinstance(country_data, pd.DataFrame):
+            st.error("❌ Country data is not a DataFrame")
+            return
+            
+        if len(country_data) == 0:
+            st.error("❌ Country data is empty")
+            return
+            
+        # Check for 'country' column specifically
+        if 'country' not in country_data.columns:
+            st.error(f"❌ 'country' column missing. Available columns: {list(country_data.columns)}")
+            # Show sample of what we actually have
+            st.sidebar.write("First 3 rows of country data:")
+            st.sidebar.dataframe(country_data.head(3))
+            return
+        
         # Display raw data structure
         with st.expander("🔍 Raw Data Structure"):
             col1, col2 = st.columns(2)
@@ -527,6 +550,7 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                 st.write("Sample data:")
                 st.dataframe(country_data.head(5))
                 st.write(f"Total countries: {len(country_data)}")
+                st.write(f"Country names sample: {country_data['country'].head(10).tolist()}")
             
             with col2:
                 st.subheader("Vulnerability Data")
@@ -535,32 +559,74 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                 st.dataframe(vulnerability_df.head(5))
                 st.write(f"Total countries: {len(vulnerability_df)}")
         
-        # Safe merge
-        merged_data = country_data.merge(vulnerability_df, on='country', how='left', suffixes=('', '_vuln'))
+        # Safe merge with enhanced error handling
+        try:
+            st.sidebar.write("🔄 Attempting data merge...")
+            
+            # Check if country names match between datasets
+            country_names_main = set(country_data['country'].dropna().unique())
+            country_names_vuln = set(vulnerability_df['country'].dropna().unique())
+            
+            st.sidebar.write(f"Main data countries: {len(country_names_main)}")
+            st.sidebar.write(f"Vulnerability data countries: {len(country_names_vuln)}")
+            st.sidebar.write(f"Overlap: {len(country_names_main & country_names_vuln)}")
+            
+            # Perform the merge
+            merged_data = country_data.merge(vulnerability_df, on='country', how='left', suffixes=('', '_vuln'))
+            st.sidebar.write("✅ Merge successful")
+            
+        except Exception as merge_error:
+            st.error(f"❌ Error merging data: {merge_error}")
+            st.sidebar.write("Merge error details:", str(merge_error))
+            return
         
         st.success(f"✅ Successfully loaded data for {len(merged_data)} countries")
         
         # Show key statistics
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            avg_warming = merged_data['warming_rate_c_per_decade'].mean()
-            st.metric("Global Average Warming", f"{avg_warming:.3f}°C/decade")
+            if 'warming_rate_c_per_decade' in merged_data.columns:
+                avg_warming = merged_data['warming_rate_c_per_decade'].mean()
+                st.metric("Global Average Warming", f"{avg_warming:.3f}°C/decade")
+            else:
+                st.metric("Global Average Warming", "N/A")
+                
         with col2:
-            max_warming = merged_data['warming_rate_c_per_decade'].max()
-            st.metric("Fastest Warming", f"{max_warming:.3f}°C/decade")
+            if 'warming_rate_c_per_decade' in merged_data.columns:
+                max_warming = merged_data['warming_rate_c_per_decade'].max()
+                st.metric("Fastest Warming", f"{max_warming:.3f}°C/decade")
+            else:
+                st.metric("Fastest Warming", "N/A")
+                
         with col3:
-            min_warming = merged_data['warming_rate_c_per_decade'].min()
-            st.metric("Slowest Warming", f"{min_warming:.3f}°C/decade")
+            if 'warming_rate_c_per_decade' in merged_data.columns:
+                min_warming = merged_data['warming_rate_c_per_decade'].min()
+                st.metric("Slowest Warming", f"{min_warming:.3f}°C/decade")
+            else:
+                st.metric("Slowest Warming", "N/A")
+                
         with col4:
-            high_quality = len(merged_data[merged_data['r_squared'] > 0.5])
-            st.metric("High Quality Data", f"{high_quality} countries")
+            if 'r_squared' in merged_data.columns:
+                high_quality = len(merged_data[merged_data['r_squared'] > 0.5])
+                st.metric("High Quality Data", f"{high_quality} countries")
+            else:
+                st.metric("High Quality Data", "N/A")
         
-        # Country selector
-        selected_country = st.selectbox(
-            "Select Country",
-            options=merged_data['country'].unique(),
-            key="country_select"
-        )
+        # Country selector with error handling
+        try:
+            unique_countries = merged_data['country'].unique()
+            if len(unique_countries) > 0:
+                selected_country = st.selectbox(
+                    "Select Country",
+                    options=unique_countries,
+                    key="country_select"
+                )
+            else:
+                st.error("No countries available in data")
+                return
+        except Exception as select_error:
+            st.error(f"Error in country selector: {select_error}")
+            return
         
         # Tabs for organized analysis
         tab1, tab2, tab3 = st.tabs(["📊 Warming Analysis", "🛡️ Vulnerability Assessment", "📈 Data Quality"])
@@ -572,40 +638,52 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
             
             with col1:
                 # Show top warming countries
-                top_countries = merged_data.nlargest(15, 'warming_rate_c_per_decade')
-                fig = px.bar(
-                    top_countries,
-                    x='warming_rate_c_per_decade',
-                    y='country',
-                    orientation='h',
-                    title='Top 15 Fastest-Warming Countries',
-                    color='warming_rate_c_per_decade',
-                    color_continuous_scale='Reds',
-                    labels={'warming_rate_c_per_decade': 'Warming Rate (°C/decade)'}
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                if 'warming_rate_c_per_decade' in merged_data.columns:
+                    top_countries = merged_data.nlargest(15, 'warming_rate_c_per_decade')
+                    fig = px.bar(
+                        top_countries,
+                        x='warming_rate_c_per_decade',
+                        y='country',
+                        orientation='h',
+                        title='Top 15 Fastest-Warming Countries',
+                        color='warming_rate_c_per_decade',
+                        color_continuous_scale='Reds',
+                        labels={'warming_rate_c_per_decade': 'Warming Rate (°C/decade)'}
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Warming rate data not available")
             
             with col2:
-                country_info = merged_data[merged_data['country'] == selected_country].iloc[0]
-                
-                # Display warming rate
-                warming_rate = country_info['warming_rate_c_per_decade']
-                st.metric(
-                    f"{selected_country} Warming Rate",
-                    f"{warming_rate:.3f}°C/decade"
-                )
-                
-                # Show comparison to average
-                avg_warming = merged_data['warming_rate_c_per_decade'].mean()
-                comparison = warming_rate - avg_warming
-                st.metric(
-                    "vs Global Average",
-                    f"{comparison:+.3f}°C/decade"
-                )
-                
-                # Show ranking
-                ranking = (merged_data['warming_rate_c_per_decade'] > warming_rate).sum() + 1
-                st.metric("Global Ranking", f"#{ranking}")
+                try:
+                    country_info = merged_data[merged_data['country'] == selected_country].iloc[0]
+                    
+                    # Display warming rate
+                    if 'warming_rate_c_per_decade' in country_info:
+                        warming_rate = country_info['warming_rate_c_per_decade']
+                        st.metric(
+                            f"{selected_country} Warming Rate",
+                            f"{warming_rate:.3f}°C/decade"
+                        )
+                        
+                        # Show comparison to average
+                        if 'warming_rate_c_per_decade' in merged_data.columns:
+                            avg_warming = merged_data['warming_rate_c_per_decade'].mean()
+                            comparison = warming_rate - avg_warming
+                            st.metric(
+                                "vs Global Average",
+                                f"{comparison:+.3f}°C/decade"
+                            )
+                        
+                        # Show ranking
+                        if 'warming_rate_c_per_decade' in merged_data.columns:
+                            ranking = (merged_data['warming_rate_c_per_decade'] > warming_rate).sum() + 1
+                            st.metric("Global Ranking", f"#{ranking}")
+                    else:
+                        st.warning("Warming rate not available for selected country")
+                        
+                except Exception as country_error:
+                    st.error(f"Error displaying country info: {country_error}")
         
         with tab2:
             st.subheader("🛡️ Climate Vulnerability Assessment")
@@ -652,26 +730,30 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                     st.plotly_chart(fig2, use_container_width=True)
                 
                 with col2:
-                    country_info = merged_data[merged_data['country'] == selected_country].iloc[0]
-                    
-                    if 'vulnerability_score' in country_info:
-                        st.metric("Vulnerability Score", f"{country_info['vulnerability_score']:.2f}")
-                    
-                    if 'vulnerability_category' in country_info:
-                        st.metric("Risk Category", country_info['vulnerability_category'])
-                    
-                    # Show risk assessment
-                    if 'vulnerability_category' in country_info:
-                        category = country_info['vulnerability_category']
-                        if category in ['High', 'Critical']:
-                            st.error("🚨 High climate vulnerability detected")
-                            st.write("**Priority for adaptation funding**")
-                        elif category == 'Medium':
-                            st.warning("⚠️ Moderate climate vulnerability")
-                            st.write("**Monitor and plan adaptation**")
-                        else:
-                            st.success("✅ Lower climate vulnerability")
-                            st.write("**Focus on mitigation**")
+                    try:
+                        country_info = merged_data[merged_data['country'] == selected_country].iloc[0]
+                        
+                        if 'vulnerability_score' in country_info:
+                            st.metric("Vulnerability Score", f"{country_info['vulnerability_score']:.2f}")
+                        
+                        if 'vulnerability_category' in country_info:
+                            st.metric("Risk Category", country_info['vulnerability_category'])
+                        
+                        # Show risk assessment
+                        if 'vulnerability_category' in country_info:
+                            category = country_info['vulnerability_category']
+                            if category in ['High', 'Critical']:
+                                st.error("🚨 High climate vulnerability detected")
+                                st.write("**Priority for adaptation funding**")
+                            elif category == 'Medium':
+                                st.warning("⚠️ Moderate climate vulnerability")
+                                st.write("**Monitor and plan adaptation**")
+                            else:
+                                st.success("✅ Lower climate vulnerability")
+                                st.write("**Focus on mitigation**")
+                                
+                    except Exception as vuln_error:
+                        st.error(f"Error displaying vulnerability info: {vuln_error}")
             
             else:
                 st.info("ℹ️ Vulnerability data not available")
@@ -692,6 +774,8 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                         color_discrete_sequence=['#3498db']
                     )
                     st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("R-squared data not available")
             
             with col2:
                 # Data points distribution
@@ -704,9 +788,21 @@ def show_country_analysis_with_vulnerability(country_data, vulnerability_df):
                         color_discrete_sequence=['#2ecc71']
                     )
                     st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("Data points information not available")
                 
     except Exception as e:
         st.error(f"Error in country analysis: {e}")
+        # Show comprehensive error details
+        with st.expander("🔧 Technical Error Details"):
+            st.write("Exception type:", type(e).__name__)
+            st.write("Exception message:", str(e))
+            st.write("Country data info:")
+            if hasattr(country_data, 'columns'):
+                st.write("Columns:", list(country_data.columns))
+                st.write("Shape:", country_data.shape)
+                st.write("First 3 rows:")
+                st.dataframe(country_data.head(3))
 
 def show_urban_analysis(urban_data):
     """Level 3: Urban-Level Analysis"""
